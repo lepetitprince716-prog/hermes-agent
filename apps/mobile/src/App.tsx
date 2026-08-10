@@ -4,7 +4,7 @@ import { Route, Routes, useNavigate, useParams } from 'react-router'
 
 import BottomNav from '@/components/BottomNav'
 import { PromptSheet } from '@/components/PromptSheet'
-import { connectGateway, gatewayRequest } from '@/lib/gateway'
+import { connectGateway, ensureLiveness, gatewayRequest } from '@/lib/gateway'
 import { defaultDashboardUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 import ChatPage from '@/pages/ChatPage'
@@ -46,6 +46,23 @@ export default function App() {
     const url = defaultDashboardUrl()
     connectGateway(url).catch(() => {})
   }, [bootTried])
+
+  // 前台恢复探活：iOS 后台杀 socket 后回前台立即验证/重连
+  useEffect(() => {
+    const onActive = () => {
+      if (document.visibilityState === 'visible') {ensureLiveness()}
+    }
+
+    document.addEventListener('visibilitychange', onActive)
+    window.addEventListener('focus', onActive)
+    window.addEventListener('pageshow', onActive)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onActive)
+      window.removeEventListener('focus', onActive)
+      window.removeEventListener('pageshow', onActive)
+    }
+  }, [])
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">

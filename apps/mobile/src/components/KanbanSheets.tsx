@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import {
-  createTask, getTask, KANBAN_COLUMN_LABELS, type KanbanStatus,
+  addComment, createTask, getTask, KANBAN_COLUMN_LABELS, type KanbanStatus,
   type TaskDetailResponse, updateTask,
 } from '@/lib/kanban'
 import { cn, formatRelativeTime } from '@/lib/utils'
@@ -45,6 +45,12 @@ export function KanbanTaskSheet({
   const [detail, setDetail] = useState<TaskDetailResponse | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [moving, setMoving] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editBody, setEditBody] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [commenting, setCommenting] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -72,6 +78,48 @@ export function KanbanTaskSheet({
     }
   }, [detail, taskId, boardSlug, load, onChanged])
 
+  const startEdit = useCallback(() => {
+    if (!detail) {return}
+    setEditTitle(detail.task.title)
+    setEditBody(detail.task.body ?? '')
+    setEditing(true)
+  }, [detail])
+
+  const saveEdit = useCallback(async () => {
+    if (!editTitle.trim() || saving) {return}
+    setSaving(true)
+    setErr(null)
+
+    try {
+      await updateTask(taskId, { body: editBody, title: editTitle.trim() }, boardSlug ?? undefined)
+      setEditing(false)
+      await load()
+      onChanged()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [editTitle, editBody, saving, taskId, boardSlug, load, onChanged])
+
+  const sendComment = useCallback(async () => {
+    const body = commentText.trim()
+
+    if (!body || commenting) {return}
+    setCommenting(true)
+    setErr(null)
+
+    try {
+      await addComment(taskId, body, boardSlug ?? undefined)
+      setCommentText('')
+      await load()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCommenting(false)
+    }
+  }, [commentText, commenting, taskId, boardSlug, load])
+
   const t = detail?.task
 
   return (
@@ -81,13 +129,55 @@ export function KanbanTaskSheet({
         <div className="py-8 text-center text-sm text-muted-foreground">加载中…</div>
       ) : (
         <div className="space-y-4">
-          {/* 元信息 */}
+          {/* 元信息 + 编辑入口 */}
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{t.id}</span>
             {t.assignee ? <span>@{t.assignee}</span> : <span>未指派</span>}
             {t.created_at ? <span>· 创建于 {formatRelativeTime(t.created_at)}</span> : null}
             {t.priority > 0 ? <span className="font-semibold text-amber-600">· P{t.priority}</span> : null}
+            {!editing ? (
+              <button
+                className="ml-auto rounded-full border bg-muted px-2.5 py-0.5 text-[10px] font-medium"
+                onClick={startEdit}
+              >
+                编辑
+              </button>
+            ) : null}
           </div>
+
+          {/* 编辑表单（标题/描述） */}
+          {editing ? (
+            <div className="space-y-2 rounded-lg border bg-background p-3">
+              <input
+                className="w-full rounded-lg border bg-card px-3 py-2 text-[13px] outline-none focus:border-primary"
+                onChange={e => setEditTitle(e.target.value)}
+                placeholder="标题"
+                value={editTitle}
+              />
+              <textarea
+                className="w-full resize-none rounded-lg border bg-card px-3 py-2 text-[13px] outline-none focus:border-primary"
+                onChange={e => setEditBody(e.target.value)}
+                placeholder="描述"
+                rows={5}
+                value={editBody}
+              />
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 rounded-lg bg-primary py-2 text-[13px] font-semibold text-primary-foreground disabled:opacity-40"
+                  disabled={!editTitle.trim() || saving}
+                  onClick={() => void saveEdit()}
+                >
+                  {saving ? '保存中…' : '保存'}
+                </button>
+                <button
+                  className="rounded-lg border bg-muted px-4 py-2 text-[13px] font-medium"
+                  onClick={() => setEditing(false)}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {/* 状态移动 chips */}
           <div>
@@ -111,8 +201,8 @@ export function KanbanTaskSheet({
             </div>
           </div>
 
-          {/* 正文 */}
-          {t.body ? (
+          {/* 正文（编辑模式下隐藏，由上方表单接管） */}
+          {t.body && !editing ? (
             <div>
               <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">描述</div>
               <div className="whitespace-pre-wrap rounded-lg border bg-background p-3 text-[13px] leading-relaxed">
@@ -144,13 +234,13 @@ export function KanbanTaskSheet({
             </div>
           ) : null}
 
-          {/* 评论 */}
-          {detail && detail.comments.length > 0 ? (
-            <div>
-              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                评论 · {detail.comments.length}
-              </div>
-              <div className="space-y-2">
+          {/* 评论 + 输入 */}
+          <div>
+            <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              评论{detail && detail.comments.length > 0 ? ` · ${detail.comments.length}` : ''}
+            </div>
+            {detail && detail.comments.length > 0 ? (
+              <div className="mb-2 space-y-2">
                 {detail.comments.map(c => (
                   <div className="rounded-lg border bg-background p-2.5" key={c.id}>
                     <div className="mb-1 text-[10px] text-muted-foreground">
@@ -160,8 +250,24 @@ export function KanbanTaskSheet({
                   </div>
                 ))}
               </div>
+            ) : null}
+            <div className="flex gap-2">
+              <input
+                className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2 text-[13px] outline-none focus:border-primary"
+                onChange={e => setCommentText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') {void sendComment()} }}
+                placeholder="写评论…"
+                value={commentText}
+              />
+              <button
+                className="shrink-0 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground disabled:opacity-40"
+                disabled={!commentText.trim() || commenting}
+                onClick={() => void sendComment()}
+              >
+                {commenting ? '…' : '发送'}
+              </button>
             </div>
-          ) : null}
+          </div>
         </div>
       )}
     </Sheet>

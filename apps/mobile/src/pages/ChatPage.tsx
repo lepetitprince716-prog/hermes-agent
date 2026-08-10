@@ -1,11 +1,14 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 
-import { Markdown } from '@/components/Markdown'
 import { gatewayRequest, interruptSession, sendPrompt } from '@/lib/gateway'
 import { cn } from '@/lib/utils'
 import { $isStreaming, $messages, type ChatMessage } from '@/store/app'
 import { $gatewayState } from '@/store/app'
+
+// streamdown+shiki 占 bundle 一半以上（292→750KB）——懒加载：
+// 首条 assistant 消息出现时才开始下载，fallback 先渲染纯文本无缝接管。
+const Markdown = lazy(() => import('@/components/Markdown').then(m => ({ default: m.Markdown })))
 
 export default function ChatPage({ sessionId }: { sessionId: string | null }) {
   const messages = useStore($messages)
@@ -86,7 +89,9 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
                   </details>
                 ) : null}
                 {m.role === 'assistant' ? (
-                  <Markdown streaming={!!m.pending} text={m.content} />
+                  <Suspense fallback={<div className="whitespace-pre-wrap break-words">{m.content}</div>}>
+                    <Markdown streaming={!!m.pending} text={m.content} />
+                  </Suspense>
                 ) : (
                   <div className="whitespace-pre-wrap break-words">{m.content}</div>
                 )}

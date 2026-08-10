@@ -220,6 +220,15 @@ export function updateTask(
   return kanbanFetch(`/tasks/${encodeURIComponent(taskId)}${q}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 
+export function addComment(taskId: string, body: string, boardSlug?: string): Promise<{ ok: boolean }> {
+  const q = boardSlug ? `?board=${encodeURIComponent(boardSlug)}` : ''
+
+  return kanbanFetch(`/tasks/${encodeURIComponent(taskId)}/comments${q}`, {
+    body: JSON.stringify({ author: 'mobile', body }),
+    method: 'POST',
+  })
+}
+
 // ---------------------------------------------------------------------------
 // WS /events — 实时任务事件流（替换轮询）
 // 契约（plugin_api.py stream_events）：

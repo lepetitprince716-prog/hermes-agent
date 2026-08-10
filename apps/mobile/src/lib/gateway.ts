@@ -214,6 +214,45 @@ export function disconnectGateway(): void {
   client = null
 }
 
+// ---------------------------------------------------------------------------
+// 前台探活 — iOS WKWebView 后台会静默挂起/杀死 socket，close 事件可能永远
+// 不触发（状态停在 'open' 的僵尸连接）。回到前台时必须主动验证：
+// 非 open → 立即重连（重置退避）；open → 3s 短超时 RPC 探活，失败强制重连。
+// ---------------------------------------------------------------------------
+
+let probeInFlight = false
+
+export function ensureLiveness(): void {
+  if (probeInFlight || manualClose || !currentInput) {return}
+  probeInFlight = true
+
+  void (async () => {
+    try {
+      const c = ensureClient()
+
+      if (c.connectionState !== 'open') {
+        reconnectAttempt = 0
+        await connectGateway(currentInput as string)
+
+        return
+      }
+
+      await Promise.race([
+        c.request('session.list', {}),
+        new Promise((_, rej) => { setTimeout(() => { rej(new Error('liveness timeout')) }, 3000) }),
+      ])
+    } catch {
+      // 僵尸连接实锤：拆掉立即重连
+      try { client?.close() } catch { /* 忽略 */ }
+      reconnectAttempt = 0
+
+      if (currentInput) {await connectGateway(currentInput).catch(() => {})}
+    } finally {
+      probeInFlight = false
+    }
+  })()
+}
+
 export function gatewayState(): ConnectionState {
   return (client?.connectionState as ConnectionState) ?? 'idle'
 }
