@@ -18,7 +18,7 @@
  *  - `ui.*` — the design language, so plugin UI looks native by default.
  */
 
-import { atom, type ReadableAtom } from 'nanostores'
+import { atom, computed, type ReadableAtom } from 'nanostores'
 
 import { $narrowViewport } from '@/components/pane-shell/tree/store'
 import { onGatewayEvent } from '@/contrib/events'
@@ -27,11 +27,19 @@ import { $gateway } from '@/store/gateway'
 import { notify, notifyError } from '@/store/notifications'
 import { $activeGatewayProfile } from '@/store/profile'
 import { $activeSessionId, $currentCwd, $currentModel, $gatewayState } from '@/store/session'
+import {
+  $focusedRuntimeId,
+  $focusedSessionState,
+  $focusedStoredSessionId
+} from '@/store/session-states'
 import { runGatewayRestart } from '@/store/system-actions'
 
 // -- state: readonly views over the app's live atoms -------------------------
 
 const readonlyAtom = <T>(atomLike: ReadableAtom<T>): ReadableAtom<T> => atomLike
+
+/** Live usage counters of the focused session (null while unresolved). */
+const $focusedUsage = computed($focusedSessionState, state => state?.usage ?? null)
 
 /** Window geometry + the app's responsive posture, one readonly rect. */
 export interface ViewportRect {
@@ -61,6 +69,12 @@ export const host = {
     activeSessionId: readonlyAtom<null | string>($activeSessionId),
     /** Active workspace cwd ('' when detached). */
     cwd: readonlyAtom<string>($currentCwd),
+    /** Runtime id of the focused session (the interacted tile, else the primary tab). */
+    focusedSessionId: readonlyAtom<null | string>($focusedRuntimeId),
+    /** Stored id of the focused session (null on a fresh draft). */
+    focusedStoredSessionId: readonlyAtom<null | string>($focusedStoredSessionId),
+    /** Live usage counters of the focused session (null while unresolved). */
+    focusedUsage: readonlyAtom($focusedUsage),
     /** Gateway socket state: 'idle' | 'connecting' | 'open' | …. */
     gateway: readonlyAtom<string>($gatewayState),
     /** Current main model slug. */

@@ -8230,6 +8230,27 @@ def _main_runtime_from_agent(agent) -> dict | None:
     return runtime or None
 
 
+def _pet_frame_geometry(spritesheet) -> tuple[int, int]:
+    """Derive the frame grid size for one spritesheet.
+
+    Petdex sheets ship as 8x9 grids of 192x208 frames. A sheet whose grid
+    is an even multiple (16x18) is a 2x hi-res sheet -> 384x416 frames.
+    Returns (frame_w, frame_h)."""
+    try:
+        from PIL import Image
+
+        from agent.pet import constants
+
+        with Image.open(spritesheet) as image:
+            cols = image.width // constants.FRAME_W
+            rows = image.height // constants.FRAME_H
+        if cols >= 2 and rows >= 2 and cols % 2 == 0 and rows % 2 == 0:
+            return constants.FRAME_W * 2, constants.FRAME_H * 2
+    except Exception:  # noqa: BLE001 - cosmetic, never break the surface
+        pass
+    return constants.FRAME_W, constants.FRAME_H
+
+
 def _pet_frame_counts(spritesheet) -> dict:
     """Real (padding-trimmed) frame count per state, for the desktop canvas.
 
@@ -8239,7 +8260,8 @@ def _pet_frame_counts(spritesheet) -> dict:
     try:
         from agent.pet import render
 
-        return render.state_frame_counts(str(spritesheet))
+        fw, fh = _pet_frame_geometry(spritesheet)
+        return render.state_frame_counts(str(spritesheet), frame_w=fw, frame_h=fh)
     except Exception:  # noqa: BLE001 - cosmetic, never break the surface
         return {}
 
@@ -8294,16 +8316,17 @@ def _pet_row_frame_counts(spritesheet) -> dict:
 
         with Image.open(spritesheet) as opened:
             image = opened.convert("RGBA")
-        cols = max(1, image.width // constants.FRAME_W)
-        row_count = max(1, image.height // constants.FRAME_H)
+        frame_w, frame_h = _pet_frame_geometry(spritesheet)
+        cols = max(1, image.width // frame_w)
+        row_count = max(1, image.height // frame_h)
         rows = constants.state_rows_for_grid(row_count)
         out: dict[str, int] = {}
         for row_idx, name in enumerate(rows[:row_count]):
-            top = row_idx * constants.FRAME_H
+            top = row_idx * frame_h
             count = 0
             for col in range(cols):
-                left = col * constants.FRAME_W
-                frame = image.crop((left, top, left + constants.FRAME_W, top + constants.FRAME_H))
+                left = col * frame_w
+                frame = image.crop((left, top, left + frame_w, top + frame_h))
                 if render._frame_is_blank(frame):
                     break
                 count += 1
@@ -8348,14 +8371,15 @@ def _pet_sprite_payload(pet, *, scale: float) -> dict:
     raw = pet.spritesheet.read_bytes()
     suffix = pet.spritesheet.suffix.lower()
     mime = "image/png" if suffix == ".png" else "image/webp"
+    frame_w, frame_h = _pet_frame_geometry(pet.spritesheet)
     payload = {
         "slug": pet.slug,
         "displayName": pet.display_name,
         "mime": mime,
         "spritesheetBase64": base64.standard_b64encode(raw).decode("ascii"),
         "spritesheetRevision": _pet_sheet_revision(pet.spritesheet),
-        "frameW": constants.FRAME_W,
-        "frameH": constants.FRAME_H,
+        "frameW": frame_w,
+        "frameH": frame_h,
         "framesPerState": constants.FRAMES_PER_STATE,
         "framesByState": _pet_frame_counts(pet.spritesheet),
         "framesByRow": _pet_row_frame_counts(pet.spritesheet),

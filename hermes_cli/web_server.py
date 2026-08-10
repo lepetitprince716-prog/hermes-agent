@@ -660,6 +660,13 @@ async def auth_middleware(request: Request, call_next):
     # and is skipped here so the gate's session attachment isn't overridden.
     if getattr(request.app.state, "auth_required", False):
         return await call_next(request)
+    # CORS preflight (OPTIONS) never carries credentials by design — the
+    # browser won't attach the session header to it. Let it fall through to
+    # CORSMiddleware so cross-origin localhost frontends (e.g. the mobile
+    # shell on another port) can preflight; the actual request is still
+    # authenticated below.
+    if request.method == "OPTIONS":
+        return await call_next(request)
     path = request.url.path
     is_mcp_oauth_callback = path.startswith("/api/mcp/oauth/callback/")
     if path.startswith("/api/") and path not in _PUBLIC_API_PATHS and not is_mcp_oauth_callback:

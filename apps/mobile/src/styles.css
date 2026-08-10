@@ -1,0 +1,81 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+@custom-variant dark (&:is(.dark *));
+
+
+
+:root {
+  color-scheme: light;
+  --dt-background: #f7f7f7;
+  --dt-foreground: #17171a;
+  --dt-card: #ffffff;
+  --dt-card-foreground: #17171a;
+  --dt-muted: #f0f0f1;
+  --dt-muted-foreground: #6b7280;
+  --dt-border: #e5e7eb;
+  --dt-input: #e5e7eb;
+  --dt-primary: #0053fd;
+  --dt-primary-foreground: #ffffff;
+  --dt-accent: #0053fd;
+  --dt-ring: #0053fd;
+  --dt-radius: 0.75rem;
+  --radius: 0.75rem;
+}
+
+.dark {
+  color-scheme: dark;
+  --dt-background: #111111;
+  --dt-foreground: #f7f7f7;
+  --dt-card: #1a1a1c;
+  --dt-card-foreground: #f7f7f7;
+  --dt-muted: #232326;
+  --dt-muted-foreground: #9ca3af;
+  --dt-border: #2a2a2e;
+  --dt-input: #2a2a2e;
+  --dt-primary: #3b82f6;
+  --dt-primary-foreground: #ffffff;
+  --dt-accent: #3b82f6;
+  --dt-ring: #3b82f6;
+}
+
+@theme inline {
+  --color-background: var(--dt-background);
+  --color-foreground: var(--dt-foreground);
+  --color-card: var(--dt-card);
+  --color-card-foreground: var(--dt-card-foreground);
+  --color-muted: var(--dt-muted);
+  --color-muted-foreground: var(--dt-muted-foreground);
+  --color-border: var(--dt-border);
+  --color-input: var(--dt-input);
+  --color-primary: var(--dt-primary);
+  --color-primary-foreground: var(--dt-primary-foreground);
+  --color-accent: var(--dt-accent);
+  --color-ring: var(--dt-ring);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  * { border-color: var(--dt-border); }
+  body {
+    background: var(--dt-background);
+    color: var(--dt-foreground);
+    font-family: ui-sans-system, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+}
+
+/* safe area for iPhone notch / home indicator */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-left { padding-left: env(safe-area-inset-left); }
+.safe-right { padding-right: env(safe-area-inset-right); }
+
+/* scrollbar */
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--dt-foreground) 12%, transparent); border-radius: 999px; }

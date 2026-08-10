@@ -200,9 +200,13 @@ function deriveLivePetState(activity: PetActivity, busy: boolean): PetState {
     busy: live,
     awaitingInput: activity.awaitingInput,
     // Steady flags only count mid-turn — ignore stale ones once at rest so an
-    // interrupted turn can't pin the pet on `run`/`review`.
-    toolRunning: live && activity.toolRunning,
-    reasoning: live && activity.reasoning,
+    // interrupted turn can't pin the pet on `run`/`review`. The event stream
+    // already clears them (tool.complete / message.complete / error), so
+    // gate them on the live flags directly rather than requiring `busy`:
+    // a turn can reach a tool/thinking event without the global busy atom
+    // flipping (e.g. resumed sessions), which left the pet stuck on idle.
+    toolRunning: activity.toolRunning,
+    reasoning: activity.reasoning,
     error: activity.error,
     justCompleted: activity.justCompleted,
     celebrate: activity.celebrate

@@ -562,6 +562,15 @@ def normalize_model_for_provider(model_input: str, target_provider: str) -> str:
             result = result.lower()
         return result
 
+    # --- xAI Grok OAuth: identical to direct xAI — strip a matching "xai/"
+    #     prefix. The OAuth identity normalizes to "xai-oauth", so a config
+    #     value like "xai/grok-4.5" (copied from aggregator slugs) would
+    #     otherwise reach api.x.ai verbatim and be rejected as an invalid
+    #     model ID (HTTP 400). See _strip_matching_provider_prefix for the
+    #     alias semantics used here. ---
+    if provider == "xai-oauth":
+        return _strip_matching_provider_prefix(name, "xai")
+
     # --- Catalogue-backed prefix repair: restore a dropped ``vendor/`` on a
     #     bare id that matches exactly one curated entry.  Unknown names (a
     #     local NIM container, a proxied model) pass through untouched. ---

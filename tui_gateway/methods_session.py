@@ -1493,6 +1493,10 @@ def _(rid, params: dict) -> dict:
         scale = float(pet_cfg.get("scale", constants.DEFAULT_SCALE) or constants.DEFAULT_SCALE)
         cols = int(params.get("cols") or 0) or constants.resolve_cols(scale, pet_cfg.get("unicode_cols", 0))
 
+        from tui_gateway.server import _pet_frame_geometry
+
+        frame_w, frame_h = _pet_frame_geometry(pet.spritesheet)
+
         # Graphics path: when the TUI is attached to a real TTY (``graphics``)
         # and the terminal speaks the kitty protocol, return a Unicode-
         # placeholder payload for a crisp image instead of half-blocks. Env
@@ -1507,7 +1511,8 @@ def _(rid, params: dict) -> dict:
                 image_id = render.kitty_image_id(pet.slug)
                 # kitty sizes from scaled pixels (_cell_box), so unicode_cols is moot here.
                 payload = PetRenderer(
-                    str(pet.spritesheet), mode="kitty", scale=scale
+                    str(pet.spritesheet), mode="kitty", scale=scale,
+                    frame_w=frame_w, frame_h=frame_h,
                 ).kitty_payload(state, image_id=image_id)
                 if payload:
                     kcount = len(payload["frames"]) or 1
@@ -1535,6 +1540,8 @@ def _(rid, params: dict) -> dict:
             mode="unicode",
             scale=scale,
             unicode_cols=cols,
+            frame_w=frame_w,
+            frame_h=frame_h,
         )
         count = renderer.frame_count(state) or 1
         frames = []
