@@ -20,7 +20,8 @@ export default defineConfig({
     port: 5175,
     strictPort: true,
     // tailscale serve 的通用入口 https://<host>.tailfd06ff.ts.net 走这个域名进来
-    allowedHosts: ['.ts.net'],
+    // hermes-mobile.zzzoficial.com = Cloudflare Tunnel 公网入口（Access 门禁保护）
+    allowedHosts: ['.ts.net', '.zzzoficial.com'],
     proxy: {
       // 同源代理到 loopback dashboard：真机无需 CORS、不触发 OAuth gate
       // （dashboard 保持 127.0.0.1 绑定，代理请求带 changeOrigin 的 Host 重写）

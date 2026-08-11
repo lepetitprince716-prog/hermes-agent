@@ -85,13 +85,19 @@ vite dev 监听 `*:5175`（含 tailnet 网卡 utun6），推荐入口按优先�
 1. **Tailscale（本地+远程通用）**：`http://100.66.221.9:5175` — Mac 的 tailnet IP 恒定，
    手机开 Tailscale app 后，Wi-Fi/热点/蜂窝下都是这同一个地址，流量走 WireGuard 加密，
    零新设施、不暴露公网。
+   - ⚠️ 2026-08-11 实测不通：Shadowrocket 在路由表写了 `100.64/10 → 192.168.0.1(en0)`，
+     tailnet 回包被物理网关黑洞。修复需在 Shadowrocket 侧调整（用户领域）。
    - 注：Mac 侧无法自连自己的 tailnet IP（hairpin 怪癖，属已知行为）不能用来验证；
      手机→Mac 方向是独立路径，以手机实测为准。
    - `tailscale serve` 可升级为 https 域名入口，但 GUI 版 CLI 设置时会挂起（App Store
      沙箱限制），需要时在 Tailscale 系统设置里配或换 standalone tailscaled。
 2. **本地 Wi-Fi/热点**：`http://<en0-IP>:5175`（`ifconfig en0 | grep inet` 查，热点 IP 会变）。
-3. **Cloudflare Tunnel（备选，真·无 VPN 公网入口）**：需配 Access 门禁（/_dash 代理暴露
-   完整 dashboard API，裸奔公网=任何人拿 URL 就能读写配置/密钥），要做先评估。
+3. **Cloudflare Tunnel（已建，真·任何网络通用）**：`https://hermes-mobile.zzzoficial.com`
+   - Access 门禁：邮箱 OTP（zzzqcy@qq.com），24h 会话。无 OTP 公网不可达（302 到登录页）。
+   - 隧道 `80fe593f`（LaunchAgent com.hermes-mobile.tunnel，KeepAlive 开机自启），
+     443 → 127.0.0.1:5175（vite），app 内 /_dash 同源代理到 dashboard。
+   - Cloudflare Mesh 评估过但不适用本机：Connector 不支持 macOS；client 模式的 mesh IP
+     在 CGNAT 段，同样被 Shadowrocket 的 100.64/10 路由劫持。
 
 ## 当前功能
 
