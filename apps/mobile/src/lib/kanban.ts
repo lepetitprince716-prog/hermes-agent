@@ -1,4 +1,4 @@
-import { defaultDashboardUrl, fetchSessionToken } from '@/lib/gateway-url'
+import { fetchSessionToken, resolveDashboardBase } from '@/lib/gateway-url'
 
 /**
  * Kanban REST client — talks to the dashboard plugin API at
@@ -120,16 +120,15 @@ export interface TaskDetailResponse {
 // HTTP plumbing
 // ---------------------------------------------------------------------------
 
-let cachedToken: string | null = null
-let cachedTokenFor: string | null = null
+let cached: { base: string; token: string } | null = null
 
-async function sessionToken(dashboardUrl: string, forceRefresh = false): Promise<string> {
-  if (!forceRefresh && cachedToken && cachedTokenFor === dashboardUrl) {return cachedToken}
-  const token = await fetchSessionToken(dashboardUrl)
-  cachedToken = token
-  cachedTokenFor = dashboardUrl
+async function sessionAuth(forceRefresh = false): Promise<{ base: string; token: string }> {
+  if (!forceRefresh && cached) {return cached}
+  const base = await resolveDashboardBase()
+  const token = await fetchSessionToken(base)
+  cached = { base, token }
 
-  return token
+  return cached
 }
 
 export class KanbanApiError extends Error {
@@ -143,8 +142,7 @@ export class KanbanApiError extends Error {
 }
 
 async function kanbanFetch<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
-  const base = defaultDashboardUrl()
-  const token = await sessionToken(base)
+  const { base, token } = await sessionAuth()
 
   const res = await fetch(`${base}/api/plugins/kanban${path}`, {
     ...init,
@@ -157,7 +155,7 @@ async function kanbanFetch<T>(path: string, init: RequestInit = {}, retry = true
 
   if (res.status === 401 && retry) {
     // Token rotated (dashboard restart) — refresh once and retry.
-    cachedToken = null
+    cached = null
 
     return kanbanFetch<T>(path, init, false)
   }
@@ -265,14 +263,24 @@ export function subscribeKanbanEvents(opts: {
     if (closed) {return}
 
     try {
-      const base = defaultDashboardUrl()
-      const token = await sessionToken(base)
-      const u = new URL(base)
-      const proto = u.protocol === 'https:' ? 'wss' : 'ws'
+      const { base, token } = await sessionAuth()
       const q = new URLSearchParams({ token, since: String(cursor) })
 
       if (opts.board) {q.set('board', opts.board)}
-      ws = new WebSocket(`${proto}://${u.host}/api/plugins/kanban/events?${q.toString()}`)
+
+      let wsUrl: string
+
+      if (base.startsWith('/')) {
+        // 同源代理：按当前页面 origin 拼 ws
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+        wsUrl = `${proto}://${location.host}${base}/api/plugins/kanban/events?${q.toString()}`
+      } else {
+        const u = new URL(base)
+        const proto = u.protocol === 'https:' ? 'wss' : 'ws'
+        wsUrl = `${proto}://${u.host}/api/plugins/kanban/events?${q.toString()}`
+      }
+
+      ws = new WebSocket(wsUrl)
 
       ws.onopen = () => { attempt = 0; opts.onOpen?.() }
 

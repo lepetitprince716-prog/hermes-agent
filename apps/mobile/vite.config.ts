@@ -15,9 +15,20 @@ export default defineConfig({
     },
   },
   server: {
-    host: '127.0.0.1',
+    // 0.0.0.0：手机热点/局域网可访问（真机入口 http://<Mac-IP>:5175）
+    host: '0.0.0.0',
     port: 5175,
     strictPort: true,
+    proxy: {
+      // 同源代理到 loopback dashboard：真机无需 CORS、不触发 OAuth gate
+      // （dashboard 保持 127.0.0.1 绑定，代理请求带 changeOrigin 的 Host 重写）
+      '/_dash': {
+        target: 'http://127.0.0.1:9119',
+        changeOrigin: true,
+        ws: true,
+        rewrite: p => p.replace(/^\/_dash/, ''),
+      },
+    },
   },
   preview: {
     host: '127.0.0.1',
