@@ -27,6 +27,10 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
         rewrite: p => p.replace(/^\/_dash/, ''),
+        // 浏览器 WS 握手带页面 Origin（LAN IP），dashboard 只收 loopback origin → 403。
+        // vite 原生选项：把 WS 握手的 Origin 重写为 target（loopback）。
+        // 注：http-proxy 的 headers 选项会让请求挂起，踩过，勿回退。
+        rewriteWsOrigin: true,
       },
     },
   },
