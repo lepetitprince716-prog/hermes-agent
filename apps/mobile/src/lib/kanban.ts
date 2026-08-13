@@ -1,4 +1,4 @@
-import { fetchSessionToken, resolveDashboardBase } from '@/lib/gateway-url'
+import { currentDashboardBase, fetchSessionToken } from '@/lib/gateway-url'
 
 /**
  * Kanban REST client — talks to the dashboard plugin API at
@@ -124,7 +124,7 @@ let cached: { base: string; token: string } | null = null
 
 async function sessionAuth(forceRefresh = false): Promise<{ base: string; token: string }> {
   if (!forceRefresh && cached) {return cached}
-  const base = await resolveDashboardBase()
+  const base = currentDashboardBase()
   const token = await fetchSessionToken(base)
   cached = { base, token }
 

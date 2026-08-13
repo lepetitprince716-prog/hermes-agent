@@ -1,8 +1,7 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useStore } from '@nanostores/react'
-import { useCallback, useEffect, useRef, useState } from 'react'
-
+import { $messages, $isStreaming, $gatewayState } from '@/store/app'
 import { sendPrompt } from '@/lib/gateway'
-import { $gatewayState, $isStreaming, $messages } from '@/store/app'
 
 export function useChat(sessionId: string | null) {
   const messages = useStore($messages)
@@ -20,16 +19,13 @@ export function useChat(sessionId: string | null) {
 
   const send = useCallback(async () => {
     const text = input.trim()
-
-    if (!text || sending || isStreaming) {return}
-
-    if (gatewayState !== 'open') {throw new Error('gateway not connected')}
+    if (!text || sending || isStreaming) return
+    if (gatewayState !== 'open') throw new Error('gateway not connected')
     setSending(true)
     // optimistic user message
     const { $messages: $m } = await import('@/store/app')
     $m.set([...$m.get(), { id: `${Date.now()}`, role: 'user', content: text }])
     setInput('')
-
     try {
       await sendPrompt(sessionId, text)
     } catch (e) {

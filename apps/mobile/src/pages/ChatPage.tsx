@@ -1,14 +1,9 @@
 import { useStore } from '@nanostores/react'
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-
-import { gatewayRequest, interruptSession, sendPrompt } from '@/lib/gateway'
-import { cn } from '@/lib/utils'
+import { useEffect, useRef, useState } from 'react'
 import { $isStreaming, $messages, type ChatMessage } from '@/store/app'
+import { gatewayRequest, sendPrompt } from '@/lib/gateway'
 import { $gatewayState } from '@/store/app'
-
-// streamdown+shiki 占 bundle 一半以上（292→750KB）——懒加载：
-// 首条 assistant 消息出现时才开始下载，fallback 先渲染纯文本无缝接管。
-const Markdown = lazy(() => import('@/components/Markdown').then(m => ({ default: m.Markdown })))
+import { cn } from '@/lib/utils'
 
 export default function ChatPage({ sessionId }: { sessionId: string | null }) {
   const messages = useStore($messages)
@@ -22,22 +17,18 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
   useEffect(() => {
     if (!sessionId) {
       $messages.set([])
-
       return
     }
-
     let cancelled = false
     gatewayRequest('session.resume', { session_id: sessionId })
       .then((res: unknown) => {
-        if (cancelled) {return}
+        if (cancelled) return
         const r = res as Record<string, unknown>
-
         const history = (r.messages ?? r.history ?? (r.result as Record<string, unknown> | undefined)?.messages ?? []) as Array<{
           role: string
           content: string
           text?: string
         }>
-
         if (Array.isArray(history) && history.length) {
           $messages.set(
             history.map((h, i) => ({
@@ -51,15 +42,14 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
         }
       })
       .catch(() => {
-        if (!cancelled) {$messages.set([])}
+        if (!cancelled) $messages.set([])
       })
-
     return () => { cancelled = true }
   }, [sessionId])
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex-1 overflow-y-auto px-3 py-3" ref={scrollerRef}>
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-3">
         {messages.length === 0 ? (
           <div className="mx-auto max-w-[520px] rounded-2xl border bg-card p-5 text-sm leading-6">
             <div className="text-sm font-semibold">Hermes Mobile</div>
@@ -74,13 +64,13 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
           <div className="mx-auto flex max-w-[720px] flex-col gap-3">
             {messages.map(m => (
               <div
+                key={m.id}
                 className={cn(
                   'rounded-2xl border px-3.5 py-2.5 text-[14px] leading-6',
-                  m.role === 'user' ? 'self-end max-w-[85%] bg-primary text-primary-foreground' : 'bg-card',
+                  m.role === 'user' ? 'self-end max-w-[85%] chat-user-bubble' : 'bg-card',
                   m.role === 'tool' ? 'border-dashed bg-muted/50 font-mono text-xs' : null,
                   m.error ? 'border-red-300' : null
                 )}
-                key={m.id}
               >
                 {m.thinking ? (
                   <details className="mb-1 text-xs opacity-70">
@@ -88,13 +78,7 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
                     <div className="whitespace-pre-wrap">{m.thinking}</div>
                   </details>
                 ) : null}
-                {m.role === 'assistant' ? (
-                  <Suspense fallback={<div className="whitespace-pre-wrap break-words">{m.content}</div>}>
-                    <Markdown streaming={!!m.pending} text={m.content} />
-                  </Suspense>
-                ) : (
-                  <div className="whitespace-pre-wrap break-words">{m.content}</div>
-                )}
+                <div className="whitespace-pre-wrap break-words">{m.content}</div>
                 {m.pending ? <span className="mt-1 inline-block size-2 animate-pulse rounded-full bg-muted-foreground" /> : null}
               </div>
             ))}
@@ -114,11 +98,9 @@ function Composer({ sessionId }: { sessionId: string | null }) {
 
   const onSend = async () => {
     const t = text.trim()
-
-    if (!t || !canSend) {return}
+    if (!t || !canSend) return
     $messages.set([...$messages.get(), { id: `${Date.now()}`, role: 'user', content: t } as ChatMessage])
     setText('')
-
     try {
       await sendPrompt(sessionId, t)
     } catch (e) {
@@ -129,44 +111,26 @@ function Composer({ sessionId }: { sessionId: string | null }) {
     }
   }
 
-  const onStop = async () => {
-    if (!sessionId) {return}
-
-    try {
-      await interruptSession(sessionId)
-    } catch { /* interrupt 尽力而为，失败不打扰 */ }
-  }
-
   return (
-    <div className="safe-bottom sticky bottom-[56px] border-t bg-card p-2">
+    <div className="safe-bottom sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] border-t bg-card p-2">
       <div className="mx-auto flex max-w-[720px] items-end gap-2">
         <textarea
-          className="max-h-28 min-h-10 flex-1 resize-none rounded-2xl border bg-background px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void onSend() }
           }}
-          placeholder={gatewayState !== 'open' ? '未连接 gateway…' : '发送消息… (Shift+Enter 换行)'}
+          placeholder={gatewayState !== 'open' ? '未连接 gateway…' : '发送消息…'}
           rows={1}
-          value={text}
+          className="max-h-28 min-h-10 flex-1 resize-none rounded-2xl border bg-background px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
-        {isStreaming ? (
-          <button
-            className="h-10 rounded-full bg-red-500 px-4 text-sm font-semibold text-white disabled:opacity-40"
-            disabled={!sessionId}
-            onClick={() => void onStop()}
-          >
-            停止
-          </button>
-        ) : (
-          <button
-            className="h-10 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-            disabled={!canSend}
-            onClick={() => void onSend()}
-          >
-            发送
-          </button>
-        )}
+        <button
+          onClick={() => void onSend()}
+          disabled={!canSend}
+          className="h-10 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+        >
+          发送
+        </button>
       </div>
       <div className="mx-auto max-w-[720px] px-1 pt-1 text-[11px] text-muted-foreground">
         WS: {gatewayState} {isStreaming ? '· 生成中…' : ''} {sessionId ? `· ${sessionId.slice(0, 8)}` : '· 新会话'}

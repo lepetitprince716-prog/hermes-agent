@@ -12,7 +12,7 @@ export type SessionInfo = {
   model?: string
   provider?: string
   tokens?: number
-   
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [k: string]: any
 }
 

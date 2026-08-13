@@ -1,34 +1,17 @@
 export type ConnectionState = 'idle' | 'connecting' | 'open' | 'closed' | 'error'
 
 export interface GatewayConn {
+  wsUrl: string
   authMode?: string | null
   profile?: string | null
-  wsUrl: string
 }
 
-/**
- * Dashboard base 解析 — 支持两种通道：
- *
- * 1. **直连**：`http://127.0.0.1:9119`（Mac 本机/模拟器/Tailscale 地址手动输入）
- * 2. **同源代理**：`/_dash`（vite dev/preview 把 `/_dash/*` 反代到 loopback dashboard，
- *    真机走热点/局域网时零 CORS、不触发非 loopback 绑定的 OAuth gate）
- *
- * `resolveDashboardBase()` 按序探测（显式输入 → 上次成功 → 默认直连 → 代理），
- * 首个能刮到会话 token 的 base 胜出并持久化到 localStorage。
- */
-
-const PROXY_PREFIX = '/_dash'
-const BASE_KEY = 'hermes-mobile-dash-base'
-const TOKEN_RE = /window\.__HERMES_SESSION_TOKEN__="([^"]+)"/
-
-/** 默认 dashboard 直连地址（http origin，不含路径） */
+/** 默认 dashboard 地址（http origin，不含路径） */
 export function defaultDashboardUrl(): string {
   const stored = localStorage.getItem('hermes-mobile-dashboard-url')
-
-  if (stored) {return stored}
+  if (stored) return stored
   const host = location.hostname || '127.0.0.1'
   const resolvedHost = host === 'localhost' ? '127.0.0.1' : host
-
   return `http://${resolvedHost}:9119`
 }
 
@@ -38,119 +21,90 @@ export function defaultDashboardUrl(): string {
  */
 export function normalizeDashboardUrl(input: string): string {
   const raw = input.trim()
-
-  if (!raw) {return defaultDashboardUrl()}
-
+  if (!raw) return defaultDashboardUrl()
   try {
     const u = new URL(raw)
-
     if (u.protocol === 'http:' || u.protocol === 'https:') {
       return `${u.protocol}//${u.host}`
     }
-
     if (u.protocol === 'ws:' || u.protocol === 'wss:') {
       const httpProto = u.protocol === 'wss:' ? 'https' : 'http'
-
       return `${httpProto}://${u.host}`
     }
-  } catch { /* URL 解析失败 → 走裸 host:port 分支 */ }
-
+  } catch {}
   // bare host:port
   return raw.match(/^[a-zA-Z0-9.-]+:\d+$/) ? `http://${raw}` : raw
 }
 
-/** 探测一个 base 是否可用：能拿到 dashboard 首页注入的会话 token 才算通 */
-async function probeBase(base: string, timeoutMs = 2500): Promise<string | null> {
-  try {
-    const res = await fetch(`${base}/`, { signal: AbortSignal.timeout(timeoutMs) })
-
-    if (!res.ok) {return null}
-    const html = await res.text()
-
-    return TOKEN_RE.exec(html)?.[1] ?? null
-  } catch {
-    return null
-  }
-}
-
-function dedupe(list: (string | null | undefined)[]): string[] {
-  const out: string[] = []
-
-  for (const item of list) {
-    if (item && !out.includes(item)) {out.push(item)}
-  }
-
-  return out
-}
-
 /**
- * 解析可用 dashboard base（origin 字符串或 `/_dash` 代理前缀）。
- * 顺序：显式输入 → 上次成功的 base → 默认直连 → 同源代理。
+ * 从 dashboard 首页 HTML 提取 `__HERMES_SESSION_TOKEN__`。
+ * loopback（非 gated）模式才注入；gated 模式需走 OAuth ticket（首版不支持，报错提示）。
+ * 模块级缓存 + 401 时调用方清缓存重取。
  */
-export async function resolveDashboardBase(preferred?: string): Promise<string> {
-  const stored = localStorage.getItem(BASE_KEY)
+let _tokenCache: { base: string; token: string } | null = null
 
-  const candidates = dedupe([
-    preferred?.trim() ? normalizeDashboardUrl(preferred) : undefined,
-    stored ?? undefined,
-    defaultDashboardUrl(),
-    PROXY_PREFIX,
-  ])
+export function clearSessionTokenCache(): void {
+  _tokenCache = null
+}
 
-  for (const base of candidates) {
-    if (await probeBase(base)) {
-      localStorage.setItem(BASE_KEY, base)
-
-      return base
+export async function fetchSessionToken(dashboardUrl: string, forceRefresh = false): Promise<string> {
+  if (!forceRefresh && _tokenCache?.base === dashboardUrl) return _tokenCache.token
+  const res = await fetch(`${dashboardUrl}/`)
+  if (!res.ok) throw new Error(`dashboard ${res.status} ${res.statusText}`)
+  const html = await res.text()
+  const m = html.match(/window\.__HERMES_SESSION_TOKEN__="([^"]+)"/)
+  if (!m?.[1]) {
+    if (html.includes('__HERMES_AUTH_REQUIRED__=true')) {
+      throw new Error('dashboard 处于 gated (OAuth) 模式，移动端首版暂不支持，请用 hermes dashboard 本地 loopback 模式')
     }
+    throw new Error('无法从 dashboard 获取会话 token')
   }
+  _tokenCache = { base: dashboardUrl, token: m[1] }
+  return m[1]
+}
 
-  throw new Error(
-    '无法连接 dashboard：直连与 /_dash 代理均失败。确认 `hermes dashboard` 在运行；'
-    + '若 dashboard 处于 gated (OAuth) 模式，移动端暂不支持',
-  )
+/** 当前生效的 dashboard http base（连接时写入的 localStorage，否则默认本机） */
+export function currentDashboardBase(): string {
+  return localStorage.getItem('hermes-mobile-dashboard-url') ?? defaultDashboardUrl()
 }
 
 /**
- * 获取会话 token。base 失效（网络切换/dashboard 重启换 token）时自动全量重解析一次。
+ * dashboard REST 调用（/api/fs/* 等）：自动带 X-Hermes-Session-Token。
+ * 401 时清 token 缓存重取并重试一次（dashboard 重启会轮换 token）。
  */
-export async function fetchSessionToken(base?: string): Promise<string> {
-  const b = base ?? await resolveDashboardBase()
-  const token = await probeBase(b)
-
-  if (token) {return token}
-  // 缓存的 base 失效：清掉重解析
-  localStorage.removeItem(BASE_KEY)
-  const b2 = await resolveDashboardBase()
-  const token2 = await probeBase(b2)
-
-  if (token2) {return token2}
-  throw new Error('无法从 dashboard 获取会话 token')
+export async function dashboardApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const base = currentDashboardBase()
+  const doFetch = async (token: string) =>
+    fetch(`${base}${path}`, {
+      ...init,
+      headers: { 'X-Hermes-Session-Token': token, ...(init?.headers ?? {}) },
+    })
+  let token = await fetchSessionToken(base)
+  let res = await doFetch(token)
+  if (res.status === 401) {
+    token = await fetchSessionToken(base, true)
+    res = await doFetch(token)
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`${res.status} ${res.statusText}${detail ? `: ${detail.slice(0, 200)}` : ''}`)
+  }
+  return (await res.json()) as T
 }
 
 /**
- * 解析完整 WS URL：先解析 base 再拿 token。
- * 兼容已带完整 ws 地址（直接用）；代理 base 时按当前页面 origin 拼 ws(s)。
+ * 解析完整 WS URL：先拿 token 再拼 `ws://host:port/api/ws?token=xxx`。
+ * 兼容已带完整 ws 地址（直接用）或 http origin（自动取 token）。
  */
 export async function resolveGatewayWsUrl(input: string): Promise<string> {
   const raw = input.trim()
-
   // 已带 token 或用户给了完整 ws 地址 → 直接用
   if (raw.startsWith('ws://') || raw.startsWith('wss://')) {
     return raw
   }
-
-  const base = await resolveDashboardBase(raw || undefined)
-  const token = await fetchSessionToken(base)
-
-  if (base.startsWith('/')) {
-    const wsProto = location.protocol === 'https:' ? 'wss' : 'ws'
-
-    return `${wsProto}://${location.host}${base}/api/ws?token=${encodeURIComponent(token)}`
-  }
-
-  const u = new URL(base)
+  const dashboardUrl = normalizeDashboardUrl(raw)
+  const token = await fetchSessionToken(dashboardUrl)
+  const u = new URL(dashboardUrl)
   const wsProto = u.protocol === 'https:' ? 'wss' : 'ws'
-
   return `${wsProto}://${u.host}/api/ws?token=${encodeURIComponent(token)}`
 }

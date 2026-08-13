@@ -1,14 +1,14 @@
-import { useStore } from '@nanostores/react'
 import { useState } from 'react'
-
+import { useStore } from '@nanostores/react'
+import { $gatewayState } from '@/store/app'
 import { connectGateway, disconnectGateway } from '@/lib/gateway'
 import { defaultDashboardUrl, normalizeDashboardUrl } from '@/lib/gateway-url'
-import { $gatewayState } from '@/store/app'
-import { $theme, applyTheme } from '@/themes'
+import { $theme, $themeMode, setTheme, setThemeMode, THEME_LIST } from '@/themes'
 
 export default function SettingsPage() {
   const gatewayState = useStore($gatewayState)
   const theme = useStore($theme)
+  const themeMode = useStore($themeMode)
   const [wsInput, setWsInput] = useState(() => localStorage.getItem('hermes-mobile-dashboard-url') ?? defaultDashboardUrl())
   const [connecting, setConnecting] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -17,7 +17,6 @@ export default function SettingsPage() {
     const url = normalizeDashboardUrl(wsInput)
     setWsInput(url)
     setConnecting(true); setMsg(null)
-
     try {
       await connectGateway(url)
       setMsg('已连接')
@@ -34,17 +33,17 @@ export default function SettingsPage() {
         </p>
         <div className="mt-3 flex gap-2">
           <input
-            className="min-w-0 flex-1 rounded-xl border bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-            onChange={e => setWsInput(e.target.value)}
-            placeholder="ws://host:9119/api/ws 或 https://host"
             value={wsInput}
+            onChange={e => setWsInput(e.target.value)}
+            placeholder="http://host:9119"
+            className="min-w-0 flex-1 rounded-xl border bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40" disabled={connecting} onClick={() => void onConnect()}>
+          <button onClick={() => void onConnect()} disabled={connecting} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40">
             {connecting ? '连接中…' : '连接'}
           </button>
-          <button className="rounded-full border bg-muted px-4 py-2 text-sm font-medium" onClick={() => { disconnectGateway(); setMsg('已断开') }}>
+          <button onClick={() => { disconnectGateway(); setMsg('已断开') }} className="rounded-full border bg-muted px-4 py-2 text-sm font-medium">
             断开
           </button>
           <span className="text-xs text-muted-foreground">状态：{gatewayState}</span>
@@ -56,13 +55,25 @@ export default function SettingsPage() {
       </section>
 
       <section className="rounded-2xl border bg-card p-4">
-        <h2 className="text-sm font-semibold">外观</h2>
-        <div className="mt-3 flex gap-2">
+        <h2 className="text-sm font-semibold">主题</h2>
+        <p className="mt-1 text-xs text-muted-foreground">与 desktop 的 Nous 主题对齐，light/dark 随系统或手动。</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {THEME_LIST.map(t => (
+            <button
+              key={t.name}
+              onClick={() => setTheme(t.name)}
+              className={`rounded-full border px-4 py-2 text-sm font-medium ${theme.name === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex gap-2">
           {(['system','light','dark'] as const).map(m => (
             <button
-              className={`rounded-full border px-4 py-2 text-sm font-medium ${theme === m ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
               key={m}
-              onClick={() => applyTheme(m)}
+              onClick={() => setThemeMode(m)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium ${themeMode === m ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
             >
               {m === 'system' ? '跟随系统' : m === 'light' ? '浅色' : '深色'}
             </button>
@@ -73,7 +84,7 @@ export default function SettingsPage() {
       <section className="rounded-2xl border bg-card p-4">
         <h2 className="text-sm font-semibold">关于</h2>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          Hermes Mobile v0.1.0 · 复用 <code>apps/shared</code> 的 <code>JsonRpcGatewayClient</code>，与 desktop 同一 gateway 同一协议。首版聚焦：连接设置 + 会话列表 + 聊天/流式 + 抽屉式会话切换。后续按 desktop 增量补：主题预设、搜索、文件/终端 pane、插件。
+          Hermes Mobile v0.1.0 · 复用 <code>apps/shared</code> 的 <code>JsonRpcGatewayClient</code>，与 desktop 同一 gateway 同一协议。首版聚焦：连接设置 + 会话列表 + 聊天/流式 + 抽屉式会话切换 + Nous 主题。后续按 desktop 增量补：文件/终端 pane、插件、kanban。
         </p>
       </section>
     </div>
