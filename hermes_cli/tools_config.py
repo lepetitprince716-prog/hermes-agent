@@ -955,9 +955,25 @@ def install_cua_driver(
     when the function returns. Supported on macOS, Windows, and Linux
     (Linux is alpha). Silently returns False on unsupported platforms.
     """
+    import os
     import platform as _plat
     import shutil
     import subprocess
+    from pathlib import Path
+
+    # Per-machine ban marker (~/.hermes/BAN_CUA_DRIVER). User removed
+    # CuaDriver.app to stop Screen Recording / Accessibility permission
+    # dialogs; open-computer-use is the only desktop driver. Skip under
+    # pytest so upstream install_cua_driver unit tests keep full coverage.
+    if (
+        os.environ.get("PYTEST_CURRENT_TEST") is None
+        and Path.home().joinpath(".hermes", "BAN_CUA_DRIVER").is_file()
+    ):
+        _print_warning(
+            "    cua-driver install is disabled on this machine "
+            "(~/.hermes/BAN_CUA_DRIVER — use open-computer-use)."
+        )
+        return False
 
     system = _plat.system()
     if system not in ("Darwin", "Windows", "Linux"):
