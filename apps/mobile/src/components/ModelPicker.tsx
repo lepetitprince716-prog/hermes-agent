@@ -177,7 +177,7 @@ export function ModelPicker({
   const popover = open && desktop ? (
     <div
       role="menu"
-      className="absolute bottom-[calc(100%+8px)] right-0 z-[80] w-[280px] overflow-hidden rounded-2xl bg-white py-1 shadow-[0_12px_40px_rgba(0,0,0,0.12)]"
+      className="absolute bottom-[calc(100%+8px)] right-0 z-[80] w-[280px] overflow-hidden rounded-2xl bg-[color-mix(in_srgb,var(--dt-background)_88%,var(--dt-foreground)_6%)] py-1 shadow-[0_8px_28px_rgba(23,23,26,0.08)]"
     >
       {menuBody}
       {err ? <div className="px-3 py-2 text-xs text-red-500">{err}</div> : null}
@@ -187,7 +187,7 @@ export function ModelPicker({
   const sheet = open && !desktop ? (
     <div className="fixed inset-0 z-[80] flex flex-col justify-end" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setOpen(null)} />
-      <div className="safe-bottom relative mx-auto w-full max-h-[80dvh] max-w-[560px] overflow-hidden rounded-t-3xl bg-card">
+      <div className="safe-bottom relative mx-auto w-full max-h-[80dvh] max-w-[560px] overflow-hidden rounded-t-3xl bg-[color-mix(in_srgb,var(--dt-background)_90%,var(--dt-foreground)_5%)]">
         <div className="px-4 pb-1 pt-3 text-sm font-medium">{open === 'model' ? '选择模型' : '思考深度'}</div>
         <div className="min-h-0 flex-1 overflow-y-auto">{menuBody}</div>
         {err ? <div className="px-4 py-2 text-xs text-red-500">{err}</div> : null}

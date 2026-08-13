@@ -136,7 +136,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
 
   return (
     <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-transparent px-3 pb-3 pt-2 md:bottom-0 md:px-6 md:pb-6">
-      <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-1 gap-y-1 rounded-full bg-black/[0.035] px-2 py-1.5 md:flex-nowrap md:px-3 dark:bg-white/[0.06]">
+      <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-1 gap-y-1 rounded-full bg-[color-mix(in_srgb,var(--dt-background)_82%,var(--dt-foreground)_7%)] px-2 py-1.5 md:flex-nowrap md:px-3">
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}

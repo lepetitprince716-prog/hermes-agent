@@ -41,8 +41,6 @@
   --color-sidebar: var(--dt-sidebar-background);
 
   --font-mono: var(--dt-font-mono);
-  --font-serif: 'Times New Roman', Times, 'Xingkai SC', 'Xingkai TC', 'Kaiti SC', 'STKaiti', 'KaiTi', serif;
-  --font-display: 'Times New Roman', Times, 'Xingkai SC', 'Kaiti SC', serif;
 
   --radius-xs: calc(var(--radius) * 0.125);
   --radius-sm: calc(var(--radius) * 0.5);
@@ -91,17 +89,13 @@
   body {
     background: var(--dt-background);
     color: var(--dt-foreground);
-    font-family: var(--font-serif);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     overscroll-behavior: none;
   }
 
-  .font-display {
-    font-family: var(--font-display);
-  }
-
   .wordmark {
-    font-family: var(--font-display);
+    font-family: inherit;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
