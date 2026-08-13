@@ -43,6 +43,7 @@ const modelSheet = await page.evaluate(() => {
   return {
     open: Boolean(dialog),
     heading: dialog?.querySelector('.font-semibold')?.textContent?.trim() ?? null,
+    headingOk: (dialog?.querySelector('.font-semibold')?.textContent ?? '').includes('推理'),
     rowCount: rows.length,
     hasGrok: rows.some(t => t?.includes('Grok 4.6')),
     hasOss: rows.some(t => t?.includes('gpt-oss')),
@@ -80,7 +81,6 @@ const desktopLayout = await desktop.evaluate(() => {
     wordmark: word?.textContent?.trim() ?? null,
     wordFont: word ? getComputedStyle(word).fontFamily : null,
     markSrc: mark?.getAttribute('src') ?? null,
-    markBg: mark?.parentElement ? getComputedStyle(mark.parentElement).backgroundColor : null,
   }
 })
 await desktop.locator('[data-testid="model-chip"]').click()
@@ -99,6 +99,15 @@ if (!modelSheet.glass?.blur || modelSheet.glass.blur === 'none') {
 }
 if (!desktopGlass?.blur || desktopGlass.blur === 'none') {
   throw new Error(`desktop popover is not glass: ${JSON.stringify(desktopGlass)}`)
+}
+if (desktopLayout.markSrc) {
+  throw new Error(`nous-girl mark still in empty state: ${desktopLayout.markSrc}`)
+}
+if (composer.placeholder !== '输入消息' && composer.placeholder !== '未连接到网关') {
+  throw new Error(`unexpected placeholder: ${composer.placeholder}`)
+}
+if (!desktopLayout.wordmark || !/Hermes Agent/i.test(desktopLayout.wordmark)) {
+  throw new Error(`wordmark missing: ${desktopLayout.wordmark}`)
 }
 
 console.log(JSON.stringify({ headerButtons, composer, modelSheet, desktopLayout, desktopGlass, jsErrors: errors }, null, 2))

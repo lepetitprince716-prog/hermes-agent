@@ -12,7 +12,6 @@ import SettingsPage from '@/pages/SettingsPage'
 import StatsPage from '@/pages/StatsPage'
 import BottomNav from '@/components/BottomNav'
 import { PromptSheet } from '@/components/PromptSheet'
-import { BrandMark } from '@/components/BrandMark'
 import { IconChart, IconFolder, IconKanban, IconMenu, IconMessage, IconSessions, IconSettings } from '@/components/icons'
 import { cn } from '@/lib/utils'
 
@@ -52,7 +51,6 @@ function SideRail() {
   const state = useStore($gatewayState)
   return (
     <aside className="hidden w-14 shrink-0 flex-col items-center border-r bg-white/60 py-4 md:flex">
-      <BrandMark className="mb-4 size-9" />
       {rail.map(t => (
         <NavLink
           key={t.to}
@@ -118,7 +116,7 @@ export default function App() {
     <div className="flex min-h-dvh bg-background">
       <SideRail />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <Routes>
             <Route path="/" element={<ChatRoute />} />
             <Route path="/s/:id" element={<ChatRoute />} />

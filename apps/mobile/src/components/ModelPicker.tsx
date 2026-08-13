@@ -146,7 +146,7 @@ export function ModelPicker({
         )
       })}
       <div className="my-1 border-t border-white/25" />
-      <div className="px-3 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">思考深度</div>
+      <div className="px-3 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">推理深度</div>
       {EFFORTS.map(row => (
         <button
           key={row}
@@ -180,7 +180,7 @@ export function ModelPicker({
       <div className="absolute inset-0 bg-primary/8" onClick={() => !busy && setOpen(false)} />
       <div className="safe-bottom relative mx-auto w-full max-h-[80dvh] max-w-[560px] overflow-hidden rounded-t-3xl border-t border-white/30 bg-background/25 shadow-[0_-8px_40px_rgba(0,53,253,0.06)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/15">
         <div className="mx-auto my-2 h-1 w-9 rounded-full bg-muted-foreground/30" />
-        <div className="px-4 pb-1 text-[13px] font-semibold text-muted-foreground">模型和思考</div>
+        <div className="px-4 pb-1 text-[13px] font-semibold text-muted-foreground">模型与推理深度</div>
         <div className="min-h-0 flex-1 overflow-y-auto">{menuBody}</div>
         {err ? <div className="px-4 py-2 text-xs text-red-500">{err}</div> : null}
       </div>

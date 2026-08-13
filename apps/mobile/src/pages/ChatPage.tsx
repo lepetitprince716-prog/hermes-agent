@@ -5,7 +5,6 @@ import { gatewayRequest, interruptSession, sendPrompt } from '@/lib/gateway'
 import { $gatewayState } from '@/store/app'
 import { cn } from '@/lib/utils'
 import { ModelPicker, usePickedEffort, usePickedModel } from '@/components/ModelPicker'
-import { BrandMark } from '@/components/BrandMark'
 import { IconArrowUp, IconPlus, IconStop } from '@/components/icons'
 
 const Markdown = lazy(() => import('@/components/Markdown').then(m => ({ default: m.Markdown })))
@@ -19,6 +18,15 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    const onPreview = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (Array.isArray(detail)) $messages.set(detail as ChatMessage[])
+    }
+    window.addEventListener('hermes:preview-messages', onPreview as EventListener)
+    return () => window.removeEventListener('hermes:preview-messages', onPreview as EventListener)
+  }, [])
 
   useEffect(() => {
     if (!sessionId) {
@@ -62,29 +70,29 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
   }, [sessionId, gatewayState])
 
   return (
-    <div className="flex flex-1 flex-col">
-      <div ref={scrollerRef} className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div ref={scrollerRef} className="min-h-0 min-w-0 w-full flex-1 overflow-y-auto px-3 py-3">
         {messages.length === 0 ? (
           <div className="mx-auto flex h-full max-w-[640px] flex-col items-center justify-center px-4 pb-[12vh] text-center">
-            <BrandMark className="mb-4 size-16" />
             <div className="wordmark whitespace-nowrap text-[32px] text-midground md:text-[40px]">Hermes Agent</div>
-            <p className="mt-4 text-[15px] leading-6 text-muted-foreground">选好模型和思考深度，直接发就行。</p>
+            <p className="mt-4 max-w-[22rem] text-[15px] leading-6 text-muted-foreground">选择模型与推理深度后开始对话。</p>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-[720px] flex-col gap-3">
+          <div className="mx-auto w-full max-w-[720px] space-y-3">
             {messages.map(m => (
               <div
                 key={m.id}
                 className={cn(
-                  'px-1 py-2 text-[15px] leading-6',
-                  m.role === 'user' ? 'self-end max-w-[85%] text-right' : '',
-                  m.role === 'tool' ? 'font-mono text-xs text-muted-foreground' : null,
-                  m.error ? 'text-red-500' : null,
+                  'text-[15px] leading-6',
+                  m.role === 'user' && 'chat-user-bubble ml-auto w-fit max-w-[min(85%,36rem)] rounded-[20px] px-3.5 py-2.5 text-left',
+                  m.role === 'assistant' && 'w-full px-1 py-1',
+                  m.role === 'tool' && 'w-full font-mono text-xs text-muted-foreground',
+                  m.error && 'text-red-500',
                 )}
               >
                 {m.thinking ? (
                   <details className="mb-1 text-xs opacity-70">
-                    <summary>思考过程</summary>
+                    <summary>推理</summary>
                     <div className="whitespace-pre-wrap">{m.thinking}</div>
                   </details>
                 ) : null}
@@ -158,7 +166,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void onSend() }
           }}
-          placeholder={gatewayState !== 'open' ? '网络未连接，无法发送' : '想问什么？'}
+          placeholder={gatewayState !== 'open' ? '未连接到网关' : '输入消息'}
           rows={1}
           className="max-h-28 min-h-9 min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70"
         />

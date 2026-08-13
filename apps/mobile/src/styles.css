@@ -110,10 +110,9 @@
     line-height: 0.9;
   }
 
-  /* 用户消息气泡 —— desktop 的 --userBubble */
+  /* 用户消息气泡 —— desktop 的 --userBubble，无描边 */
   .chat-user-bubble {
     background: var(--dt-user-bubble);
-    border-color: var(--dt-user-bubble-border);
     color: var(--dt-foreground);
   }
 

@@ -56,7 +56,7 @@ export default function SessionsPage() {
       <div className="flex-1 overflow-y-auto">
         {sessions.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">
-            {loading ? '加载中…' : '暂无会话，去新建一个吧'}
+            {loading ? '加载中…' : '暂无会话'}
           </div>
         ) : (
           <ul className="divide-y">
