@@ -49,7 +49,7 @@ export function ModelPicker({
   const liveModel = useStore($currentModel)
   const liveProvider = useStore($currentProvider)
   const liveEffort = useStore($currentEffort)
-  const [open, setOpen] = useState<'model' | 'effort' | null>(null)
+  const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [draft, setDraft] = useState<ModelChoice>(() => loadSavedModel())
@@ -66,11 +66,11 @@ export function ModelPicker({
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) setOpen(null)
+      if (e.key === 'Escape' && !busy) setOpen(false)
     }
     const onDown = (e: MouseEvent) => {
       if (!desktop) return
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(null)
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
     window.addEventListener('keydown', onKey)
     window.addEventListener('mousedown', onDown)
@@ -86,14 +86,10 @@ export function ModelPicker({
     $currentModel.set(choice.model)
     $currentProvider.set(choice.provider)
     setErr(null)
-    if (!sessionId) {
-      setOpen(null)
-      return
-    }
+    if (!sessionId) return
     setBusy(true)
     try {
       await applySessionModel(sessionId, choice.provider, choice.model)
-      setOpen(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -107,13 +103,13 @@ export function ModelPicker({
     $currentEffort.set(next)
     setErr(null)
     if (!sessionId) {
-      setOpen(null)
+      setOpen(false)
       return
     }
     setBusy(true)
     try {
       await applySessionEffort(sessionId, next)
-      setOpen(null)
+      setOpen(false)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -121,35 +117,13 @@ export function ModelPicker({
     }
   }
 
-  const chipClass = variant === 'inline'
-    ? 'inline-flex h-8 max-w-[11rem] shrink-0 items-center gap-0.5 rounded-full px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground active:scale-[0.97]'
-    : 'max-w-[42vw] truncate rounded-full px-3 py-1.5 text-xs font-medium'
-
-  const menuBody = open === 'effort' ? (
-    <div className="py-1">
-      {EFFORTS.map(row => (
-        <button
-          key={row}
-          type="button"
-          disabled={busy}
-          onClick={() => void pickEffort(row)}
-          className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-foreground/[0.06] disabled:opacity-50"
-        >
-          <div className="min-w-0 flex-1">
-            <div className="text-[14px] font-medium">{EFFORT_LABELS[row]}</div>
-            <div className="mt-0.5 text-[12px] text-muted-foreground">{EFFORT_HINTS[row]}</div>
-          </div>
-          {row === effort ? <IconCheck className="mt-0.5 shrink-0 opacity-70" /> : null}
-        </button>
-      ))}
-    </div>
-  ) : (
-    <div className="max-h-[60vh] overflow-y-auto py-1">
+  const menuBody = (
+    <div className="max-h-[min(420px,60dvh)] overflow-y-auto py-1">
       {MODEL_GROUPS.map(group => {
         const rows = MOBILE_MODELS.filter(m => m.group === group.id)
         return (
-          <section key={group.id} className="pb-1">
-            <div className="px-3 pb-1 pt-2 text-[11px] text-muted-foreground">{group.title}</div>
+          <section key={group.id}>
+            <div className="px-3 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">{group.title}</div>
             {rows.map(row => {
               const active = modelKey(row) === modelKey(selected)
               return (
@@ -158,26 +132,43 @@ export function ModelPicker({
                   type="button"
                   disabled={busy}
                   onClick={() => void pickModel(row)}
-                  className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-foreground/[0.06] disabled:opacity-50"
+                  className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-muted disabled:opacity-50"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-[14px] font-medium">{row.label}</div>
-                    <div className="mt-0.5 truncate text-[12px] text-muted-foreground">{row.hint}</div>
+                    <div className="text-sm font-medium">{row.label}</div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">{row.hint}</div>
                   </div>
-                  {active ? <IconCheck className="mt-0.5 shrink-0 opacity-70" /> : null}
+                  {active ? <IconCheck className="mt-0.5 shrink-0 text-primary" /> : null}
                 </button>
               )
             })}
           </section>
         )
       })}
+      <div className="my-1 border-t" />
+      <div className="px-3 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">思考深度</div>
+      {EFFORTS.map(row => (
+        <button
+          key={row}
+          type="button"
+          disabled={busy}
+          onClick={() => void pickEffort(row)}
+          className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-muted disabled:opacity-50"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{EFFORT_LABELS[row]}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">{EFFORT_HINTS[row]}</div>
+          </div>
+          {row === effort ? <IconCheck className="mt-0.5 shrink-0 text-primary" /> : null}
+        </button>
+      ))}
     </div>
   )
 
   const popover = open && desktop ? (
     <div
       role="menu"
-      className="absolute bottom-[calc(100%+8px)] right-0 z-[80] w-[280px] overflow-hidden rounded-2xl bg-background/20 py-1 shadow-[0_8px_32px_rgba(0,53,253,0.08)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/15"
+      className="absolute bottom-[calc(100%+8px)] right-0 z-[80] w-[280px] overflow-hidden rounded-xl border bg-card py-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)]"
     >
       {menuBody}
       {err ? <div className="px-3 py-2 text-xs text-red-500">{err}</div> : null}
@@ -186,9 +177,10 @@ export function ModelPicker({
 
   const sheet = open && !desktop ? (
     <div className="fixed inset-0 z-[80] flex flex-col justify-end" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-primary/5" onClick={() => !busy && setOpen(null)} />
-      <div className="safe-bottom relative mx-auto w-full max-h-[80dvh] max-w-[560px] overflow-hidden rounded-t-3xl bg-background/25 shadow-[0_-8px_40px_rgba(0,53,253,0.06)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/15">
-        <div className="px-4 pb-1 pt-3 text-sm font-medium">{open === 'model' ? '选择模型' : '思考深度'}</div>
+      <div className="absolute inset-0 bg-black/20" onClick={() => !busy && setOpen(false)} />
+      <div className="safe-bottom relative mx-auto w-full max-h-[80dvh] max-w-[560px] overflow-hidden rounded-t-3xl border-t bg-card shadow-[0_-8px_40px_rgba(15,23,42,0.08)]">
+        <div className="mx-auto my-2 h-1 w-9 rounded-full bg-muted-foreground/30" />
+        <div className="px-4 pb-1 text-[13px] font-semibold text-muted-foreground">模型和思考</div>
         <div className="min-h-0 flex-1 overflow-y-auto">{menuBody}</div>
         {err ? <div className="px-4 py-2 text-xs text-red-500">{err}</div> : null}
       </div>
@@ -197,28 +189,22 @@ export function ModelPicker({
 
   return (
     <div ref={rootRef} className="relative">
-      <div className={cn('flex min-w-0 items-center', variant === 'inline' ? 'gap-0.5' : 'gap-2')}>
-        <button
-          type="button"
-          data-testid="model-chip"
-          onClick={() => setOpen(open === 'model' ? null : 'model')}
-          className={chipClass}
-          title={`${selected.label} · ${selected.hint}`}
-        >
-          <span className="truncate">{selected.label}</span>
-          <IconChevronDown className="shrink-0 opacity-50" />
-        </button>
-        <button
-          type="button"
-          data-testid="effort-chip"
-          onClick={() => setOpen(open === 'effort' ? null : 'effort')}
-          className={chipClass}
-          title={`思考 ${EFFORT_LABELS[effort]}`}
-        >
-          {EFFORT_LABELS[effort]}
-          <IconChevronDown className="shrink-0 opacity-50" />
-        </button>
-      </div>
+      <button
+        type="button"
+        data-testid="model-chip"
+        onClick={() => setOpen(v => !v)}
+        className={cn(
+          variant === 'inline'
+            ? 'inline-flex h-8 max-w-[16rem] shrink-0 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-medium text-foreground/80 hover:bg-muted/80 active:scale-[0.97]'
+            : 'max-w-[42vw] truncate rounded-full bg-muted px-3 py-1.5 text-xs font-medium',
+        )}
+        title={`${selected.label} · ${EFFORT_LABELS[effort]}`}
+      >
+        <span className="max-w-[9.5rem] truncate">{selected.label}</span>
+        <span className="text-muted-foreground">·</span>
+        <span data-testid="effort-chip" className="shrink-0 text-muted-foreground">{EFFORT_LABELS[effort]}</span>
+        <IconChevronDown className="shrink-0 opacity-50" />
+      </button>
       {popover}
       {sheet && typeof document !== 'undefined' ? createPortal(sheet, document.body) : null}
     </div>

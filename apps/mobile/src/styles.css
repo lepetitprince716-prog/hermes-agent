@@ -3,6 +3,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@font-face {
+  font-family: 'Collapse';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/Collapse-Bold.woff2') format('woff2');
+}
+
 /* ── Desktop Nous 主题的 CSS 变量映射 ──────────────────────────────────────
    与 desktop styles.css 的 @theme inline 完全一致：mobile 的 --dt-* 变量
    直接映射到 Tailwind 的 --color-* token，组件里 bg-card/ text-primary 等
@@ -95,9 +103,9 @@
   }
 
   .wordmark {
-    font-family: inherit;
+    font-family: Collapse, system-ui, sans-serif;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     line-height: 0.9;
   }

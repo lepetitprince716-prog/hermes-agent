@@ -27,14 +27,14 @@ function TopBar({ title, right }: { title: string; right?: React.ReactNode }) {
   )
 }
 
-function GatewayBadge() {
+function OfflineBadge() {
   const state = useStore($gatewayState)
   const err = useStore($gatewayError)
-  const dot = state === 'open' ? 'bg-emerald-500' : state === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-zinc-400'
-  const label = state === 'open' ? '已连接' : state === 'connecting' ? '连接中' : state === 'error' ? '错误' : '未连接'
+  if (state === 'open') return null
+  const label = state === 'connecting' ? '连接中' : state === 'error' ? '未连接' : '未连接'
   return (
-    <span className="inline-flex items-center gap-1.5 px-1 py-1 text-xs text-muted-foreground" title={err ?? undefined}>
-      <span className={cn('size-2 rounded-full', dot)} />
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2 py-1 text-xs text-red-600" title={err ?? undefined}>
+      <span className="size-1.5 rounded-full bg-red-500" />
       {label}
     </span>
   )
@@ -45,14 +45,14 @@ const rail = [
   { to: '/projects', label: '项目', Icon: IconFolder },
   { to: '/kanban', label: '看板', Icon: IconKanban },
   { to: '/stats', label: '统计', Icon: IconChart },
-  { to: '/sessions', label: '会话', Icon: IconSessions },
-  { to: '/settings', label: '设置', Icon: IconSettings },
+  { to: '/sessions', label: '历史', Icon: IconSessions },
 ]
 
 function SideRail() {
+  const state = useStore($gatewayState)
   return (
-    <aside className="hidden w-16 shrink-0 flex-col items-center py-4 md:flex">
-      <BrandMark className="mb-4 size-9 rounded-lg" />
+    <aside className="hidden w-14 shrink-0 flex-col items-center border-r bg-white/60 py-4 md:flex">
+      <BrandMark className="mb-4 size-9" />
       {rail.map(t => (
         <NavLink
           key={t.to}
@@ -62,13 +62,33 @@ function SideRail() {
           className={({ isActive }) =>
             cn(
               'mb-1 grid size-10 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-              isActive && 'bg-muted text-foreground',
+              isActive && 'bg-[#E8EFFC] text-primary',
             )
           }
         >
           <t.Icon size={18} />
         </NavLink>
       ))}
+      <div className="mt-auto flex flex-col items-center gap-2">
+        <NavLink
+          to="/settings"
+          title="设置"
+          className={({ isActive }) =>
+            cn(
+              'relative grid size-10 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground',
+              isActive && 'bg-[#E8EFFC] text-primary',
+            )
+          }
+        >
+          <IconSettings size={18} />
+          <span
+            className={cn(
+              'absolute right-1.5 top-1.5 size-2 rounded-full',
+              state === 'open' ? 'bg-emerald-500' : state === 'connecting' ? 'bg-amber-400' : 'bg-red-500',
+            )}
+          />
+        </NavLink>
+      </div>
     </aside>
   )
 }
@@ -102,13 +122,13 @@ export default function App() {
           <Routes>
             <Route path="/" element={<ChatRoute />} />
             <Route path="/s/:id" element={<ChatRoute />} />
-            <Route path="/projects" element={<><TopBar title="项目" right={<GatewayBadge />} /><ProjectsPage /></>} />
-            <Route path="/projects/:projectId" element={<><TopBar title="文件" right={<GatewayBadge />} /><FilesPage /></>} />
-            <Route path="/kanban" element={<><TopBar title="看板" right={<GatewayBadge />} /><KanbanPage /></>} />
-            <Route path="/stats" element={<><TopBar title="统计" right={<GatewayBadge />} /><StatsPage /></>} />
-            <Route path="/sessions" element={<><TopBar title="会话" right={<GatewayBadge />} /><SessionsPage /></>} />
-            <Route path="/settings" element={<><TopBar title="设置" right={<GatewayBadge />} /><SettingsPage /></>} />
-            <Route path="*" element={<><TopBar title="Hermes" right={<GatewayBadge />} /><ChatRoute /></>} />
+            <Route path="/projects" element={<><TopBar title="项目" right={<OfflineBadge />} /><ProjectsPage /></>} />
+            <Route path="/projects/:projectId" element={<><TopBar title="文件" right={<OfflineBadge />} /><FilesPage /></>} />
+            <Route path="/kanban" element={<><TopBar title="看板" right={<OfflineBadge />} /><KanbanPage /></>} />
+            <Route path="/stats" element={<><TopBar title="统计" right={<OfflineBadge />} /><StatsPage /></>} />
+            <Route path="/sessions" element={<><TopBar title="历史" right={<OfflineBadge />} /><SessionsPage /></>} />
+            <Route path="/settings" element={<><TopBar title="设置" right={<OfflineBadge />} /><SettingsPage /></>} />
+            <Route path="*" element={<><TopBar title="Hermes" right={<OfflineBadge />} /><ChatRoute /></>} />
           </Routes>
         </div>
         <BottomNav />
@@ -147,21 +167,21 @@ function ChatRoute() {
         <div className="flex h-14 items-center justify-between px-3">
           <button
             onClick={() => navigate('/sessions')}
-            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[15px] font-semibold transition-colors hover:bg-muted md:hidden"
           >
             <IconMenu />
             会话 {sessions.length ? `· ${sessions.length}` : ''}
           </button>
-          <div className="wordmark hidden text-[13px] text-midground md:block">Hermes</div>
-          <GatewayBadge />
+          <span className="hidden md:block" />
+          <OfflineBadge />
           <button
             onClick={() => navigate('/settings')}
-            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+            aria-label="设置"
+            className="inline-flex items-center justify-center rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
           >
-            <IconSettings size={14} />
-            设置
+            <IconSettings size={16} />
           </button>
-          <span className="hidden w-16 md:block" />
+          <span className="hidden w-8 md:block" />
         </div>
       </div>
       <ChatPage sessionId={sid} />

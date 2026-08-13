@@ -63,3 +63,6 @@ export function IconCheck(p: IconProps) {
 export function IconMenu(p: IconProps) {
   return <Icon size={16} {...p}><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h16" /></Icon>
 }
+export function IconPlus(p: IconProps) {
+  return <Icon size={16} {...p}><path d="M12 5v14" /><path d="M5 12h14" /></Icon>
+}

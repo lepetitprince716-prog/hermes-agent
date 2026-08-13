@@ -6,7 +6,7 @@ import { $gatewayState } from '@/store/app'
 import { cn } from '@/lib/utils'
 import { ModelPicker, usePickedEffort, usePickedModel } from '@/components/ModelPicker'
 import { BrandMark } from '@/components/BrandMark'
-import { IconArrowUp, IconStop } from '@/components/icons'
+import { IconArrowUp, IconPlus, IconStop } from '@/components/icons'
 
 const Markdown = lazy(() => import('@/components/Markdown').then(m => ({ default: m.Markdown })))
 
@@ -63,12 +63,12 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-3">
+      <div ref={scrollerRef} className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
         {messages.length === 0 ? (
-          <div className="mx-auto flex max-w-[640px] flex-col items-center px-4 pt-[14vh] text-center">
-            <BrandMark className="mb-5 size-16 rounded-xl shadow-[0_8px_24px_rgba(0,53,253,0.08)]" />
-            <div className="wordmark text-[clamp(2.4rem,8vw,4.6rem)] text-midground">Hermes Agent</div>
-            <p className="mt-4 text-[15px] tracking-tight text-muted-foreground">选好模型和思考深度，直接发就行。</p>
+          <div className="mx-auto flex h-full max-w-[640px] flex-col items-center justify-center px-4 pb-[12vh] text-center">
+            <BrandMark className="mb-4 size-16" />
+            <div className="wordmark whitespace-nowrap text-[32px] text-midground md:text-[40px]">Hermes Agent</div>
+            <p className="mt-4 text-[15px] leading-6 text-muted-foreground">选好模型和思考深度，直接发就行。</p>
           </div>
         ) : (
           <div className="mx-auto flex max-w-[720px] flex-col gap-3">
@@ -138,7 +138,20 @@ function Composer({ sessionId }: { sessionId: string | null }) {
 
   return (
     <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-transparent px-3 pb-3 pt-2 md:bottom-0 md:px-6 md:pb-6">
-      <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-1 gap-y-1 rounded-full bg-[color-mix(in_srgb,var(--dt-background)_82%,var(--dt-foreground)_7%)] px-2 py-1.5 md:flex-nowrap md:px-3">
+      <div className="mx-auto flex max-w-[720px] items-center gap-1.5 rounded-[24px] border border-black/8 bg-card px-2 py-1.5 shadow-[0_2px_12px_rgba(15,23,42,0.06)] focus-within:border-primary/40 focus-within:shadow-[0_2px_16px_rgba(0,83,253,0.10)]">
+        <button
+          type="button"
+          aria-label="附件"
+          className="grid size-8 shrink-0 place-items-center rounded-full border text-muted-foreground"
+          onClick={() => {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.multiple = true
+            input.click()
+          }}
+        >
+          <IconPlus />
+        </button>
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
@@ -147,26 +160,24 @@ function Composer({ sessionId }: { sessionId: string | null }) {
           }}
           placeholder={gatewayState !== 'open' ? '网络未连接，无法发送' : '想问什么？'}
           rows={1}
-          className="order-1 max-h-28 min-h-9 min-w-[10rem] flex-1 resize-none bg-transparent px-2 py-1.5 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70"
+          className="max-h-28 min-h-9 min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70"
         />
-        <div className="order-3 min-w-0 md:order-2">
-          <ModelPicker sessionId={sessionId} variant="inline" />
-        </div>
+        <ModelPicker sessionId={sessionId} variant="inline" />
         {isStreaming ? (
           <button
             onClick={() => void onStop()}
             disabled={!sessionId}
             aria-label="停止"
-            className="order-2 grid size-9 shrink-0 place-items-center rounded-full bg-red-600 text-white transition-transform active:scale-[0.97] disabled:opacity-40 md:order-3"
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-red-600 text-white transition-transform active:scale-[0.97] disabled:opacity-40"
           >
-            <span className="block"><IconStop /></span>
+            <IconStop />
           </button>
         ) : (
           <button
             onClick={() => void onSend()}
             disabled={!canSend}
             aria-label="发送"
-            className="order-2 grid size-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-[0.97] disabled:opacity-30 md:order-3"
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-[0.97] disabled:bg-muted disabled:text-muted-foreground"
           >
             <IconArrowUp />
           </button>
