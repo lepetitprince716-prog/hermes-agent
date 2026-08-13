@@ -67,5 +67,24 @@ const effortSheet = await page.evaluate(() => {
 })
 await page.screenshot({ path: '/tmp/mobile-effort-picker.png', fullPage: true })
 
-console.log(JSON.stringify({ headerButtons, composer, modelSheet, effortSheet, jsErrors: errors }, null, 2))
+const desktop = await b.newPage({ viewport: { width: 1280, height: 820 } })
+await desktop.goto('http://127.0.0.1:5175/#/', { waitUntil: 'domcontentloaded', timeout: 15000 })
+await desktop.waitForFunction(() => (document.querySelector('#root')?.childElementCount ?? 0) > 0, { timeout: 8000 })
+await desktop.waitForTimeout(1500)
+const desktopLayout = await desktop.evaluate(() => {
+  const ta = document.querySelector('textarea')
+  const box = ta?.parentElement
+  const chipsInCapsule = Boolean(box?.querySelector('[data-testid="model-chip"]'))
+  return {
+    placeholder: ta?.getAttribute('placeholder') ?? null,
+    capsuleH: box ? Math.round(box.getBoundingClientRect().height) : null,
+    capsuleRadius: box ? getComputedStyle(box).borderRadius : null,
+    chipsInCapsule,
+    sendAria: document.querySelector('button[aria-label="发送"]')?.getAttribute('aria-label') ?? null,
+  }
+})
+await desktop.screenshot({ path: '/tmp/chat-refs/ours-desktop.png', fullPage: false })
+await desktop.close()
+
+console.log(JSON.stringify({ headerButtons, composer, modelSheet, effortSheet, desktopLayout, jsErrors: errors }, null, 2))
 await b.close()

@@ -1,8 +1,9 @@
 import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { applySessionEffort, applySessionModel } from '@/lib/gateway'
-import { EFFORT_LABELS, EFFORTS, loadSavedEffort, normalizeEffort, saveEffort, type Effort } from '@/lib/effort'
+import { EFFORT_HINTS, EFFORT_LABELS, EFFORTS, loadSavedEffort, normalizeEffort, saveEffort, type Effort } from '@/lib/effort'
 import {
   findModel,
   loadSavedModel,
@@ -99,8 +100,90 @@ export function ModelPicker({
   }
 
   const chipClass = variant === 'inline'
-    ? 'max-w-[46%] truncate rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted'
+    ? 'inline-flex h-8 max-w-[11rem] shrink-0 items-center rounded-full px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97]'
     : 'max-w-[42vw] truncate rounded-full border bg-muted px-3 py-1.5 text-xs font-medium'
+
+  const sheet = open ? (
+    <div className="fixed inset-0 z-[80] flex flex-col justify-end" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/40" onClick={() => !busy && setOpen(null)} />
+      <div className="safe-bottom relative mx-auto flex w-full max-h-[85dvh] max-w-[560px] flex-col rounded-t-2xl border-t bg-card shadow-xl md:mb-8 md:max-h-[70vh] md:rounded-2xl md:border">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold">{open === 'model' ? '选择模型' : '思考深度'}</div>
+            <div className="text-[11px] text-muted-foreground">仅对当前会话生效</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(null)}
+            disabled={busy}
+            className="rounded-full bg-muted px-3 py-1 text-xs active:scale-[0.97]"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          {open === 'effort' ? (
+            <div className="overflow-hidden rounded-2xl border">
+              {EFFORTS.map(row => (
+                <button
+                  key={row}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void pickEffort(row)}
+                  className={cn(
+                    'flex w-full items-center justify-between border-b px-4 py-3 text-left last:border-b-0 disabled:opacity-50',
+                    row === effort ? 'bg-primary/10' : 'bg-card hover:bg-muted/60',
+                  )}
+                >
+                  <div>
+                    <div className="text-sm font-medium">{EFFORT_LABELS[row]}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">{EFFORT_HINTS[row]}</div>
+                  </div>
+                  {row === effort ? <span className="text-sm text-primary">✓</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : (
+            MODEL_GROUPS.map(group => {
+              const rows = MOBILE_MODELS.filter(m => m.group === group.id)
+              return (
+                <section key={group.id} className="mb-4 last:mb-0">
+                  <div className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group.title}
+                  </div>
+                  <div className="overflow-hidden rounded-2xl border">
+                    {rows.map(row => {
+                      const active = modelKey(row) === modelKey(selected)
+                      return (
+                        <button
+                          key={modelKey(row)}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void pickModel(row)}
+                          className={cn(
+                            'flex w-full items-center justify-between border-b px-4 py-3 text-left last:border-b-0 disabled:opacity-50',
+                            active ? 'bg-primary/10' : 'bg-card hover:bg-muted/60',
+                          )}
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium">{row.label}</div>
+                            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{row.hint}</div>
+                          </div>
+                          {active ? <span className="ml-3 text-sm text-primary">✓</span> : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              )
+            })
+          )}
+        </div>
+        {err ? <div className="border-t px-4 py-2 text-xs text-red-500">{err}</div> : null}
+        {busy ? <div className="border-t px-4 py-2 text-xs text-muted-foreground">切换中…</div> : null}
+      </div>
+    </div>
+  ) : null
 
   return (
     <>
@@ -112,8 +195,8 @@ export function ModelPicker({
           className={chipClass}
           title={`${selected.label} · ${selected.hint}`}
         >
-          {selected.label}
-          <span className="ml-0.5 opacity-60">▾</span>
+          <span className="truncate">{selected.label}</span>
+          <span className="ml-0.5 shrink-0 opacity-50">▾</span>
         </button>
         <button
           type="button"
@@ -123,88 +206,10 @@ export function ModelPicker({
           title={`思考 ${EFFORT_LABELS[effort]}`}
         >
           {EFFORT_LABELS[effort]}
-          <span className="ml-0.5 opacity-60">▾</span>
+          <span className="ml-0.5 shrink-0 opacity-50">▾</span>
         </button>
       </div>
-      {open ? (
-        <div className="fixed inset-0 z-40 flex flex-col justify-end" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !busy && setOpen(null)} />
-          <div className="safe-bottom relative flex max-h-[85dvh] flex-col rounded-t-2xl border-t bg-card shadow-xl">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <div>
-                <div className="text-sm font-semibold">{open === 'model' ? '选择模型' : '思考深度'}</div>
-                <div className="text-[11px] text-muted-foreground">只改这一局，不写全局默认。</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpen(null)}
-                disabled={busy}
-                className="rounded-full bg-muted px-3 py-1 text-xs"
-              >
-                关闭
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-              {open === 'effort' ? (
-                <div className="flex flex-col gap-1.5">
-                  {EFFORTS.map(row => (
-                    <button
-                      key={row}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void pickEffort(row)}
-                      className={cn(
-                        'rounded-xl border px-3 py-2.5 text-left disabled:opacity-50',
-                        row === effort ? 'border-primary bg-primary/10' : 'bg-background',
-                      )}
-                    >
-                      <div className="text-sm font-medium">{EFFORT_LABELS[row]}</div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {row === 'none' ? '关掉思考' : `reasoning_effort=${row}`}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                MODEL_GROUPS.map(group => {
-                  const rows = MOBILE_MODELS.filter(m => m.group === group.id)
-                  return (
-                    <section key={group.id} className="mb-4 last:mb-0">
-                      <div className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {group.title}
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {rows.map(row => {
-                          const active = modelKey(row) === modelKey(selected)
-                          return (
-                            <button
-                              key={modelKey(row)}
-                              type="button"
-                              disabled={busy}
-                              onClick={() => void pickModel(row)}
-                              className={cn(
-                                'rounded-xl border px-3 py-2.5 text-left disabled:opacity-50',
-                                active ? 'border-primary bg-primary/10' : 'bg-background',
-                              )}
-                            >
-                              <div className="text-sm font-medium">{row.label}</div>
-                              <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                                {row.hint} · {row.model}
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </section>
-                  )
-                })
-              )}
-            </div>
-            {err ? <div className="border-t px-4 py-2 text-xs text-red-500">{err}</div> : null}
-            {busy ? <div className="border-t px-4 py-2 text-xs text-muted-foreground">切换中…</div> : null}
-          </div>
-        </div>
-      ) : null}
+      {sheet && typeof document !== 'undefined' ? createPortal(sheet, document.body) : null}
     </>
   )
 }

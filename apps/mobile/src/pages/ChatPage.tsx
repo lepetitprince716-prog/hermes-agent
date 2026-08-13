@@ -63,14 +63,9 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
     <div className="flex flex-1 flex-col">
       <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-3">
         {messages.length === 0 ? (
-          <div className="mx-auto max-w-[520px] rounded-2xl border bg-card p-5 text-sm leading-6">
-            <div className="text-sm font-semibold">Hermes Mobile</div>
-            <p className="mt-1 text-muted-foreground">
-              与 desktop 同一 gateway、同一 WS 协议。聊天、项目、看板、统计都在底部。
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              当前会话：{sessionId ?? '新会话'} {isStreaming ? '· 正在生成…' : ''}
-            </p>
+          <div className="mx-auto flex max-w-[520px] flex-col items-center px-4 pt-[12vh] text-center">
+            <div className="text-[28px] font-semibold tracking-tight">Hermes</div>
+            <p className="mt-2 text-sm text-muted-foreground">选好模型和思考深度，直接发就行。</p>
           </div>
         ) : (
           <div className="mx-auto flex max-w-[720px] flex-col gap-3">
@@ -139,39 +134,42 @@ function Composer({ sessionId }: { sessionId: string | null }) {
   }
 
   return (
-    <div className="safe-bottom sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-background px-3 pb-2 pt-1">
-      <div className="mx-auto max-w-[720px] rounded-[22px] border bg-card px-3 py-2 shadow-sm">
+    <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-background/80 px-3 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+      <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-1 gap-y-1 rounded-[28px] border border-border/70 bg-card/90 px-2 py-1.5 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03),0_1px_2px_rgba(0,0,0,0.04)] md:flex-nowrap md:rounded-full md:px-3">
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void onSend() }
           }}
-          placeholder={gatewayState !== 'open' ? '未连接 gateway…' : '发消息…'}
+          placeholder={gatewayState !== 'open' ? '网络未连接，无法发送' : '想问什么？'}
           rows={1}
-          className="max-h-28 min-h-10 w-full resize-none bg-transparent px-1 py-1.5 text-sm outline-none"
+          className="order-1 max-h-28 min-h-9 min-w-[10rem] flex-1 resize-none bg-transparent px-2 py-1.5 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70"
         />
-        <div className="flex items-center gap-2 pt-1">
+        <div className="order-3 min-w-0 md:order-2">
           <ModelPicker sessionId={sessionId} variant="inline" />
-          <div className="flex-1" />
-          {isStreaming ? (
-            <button
-              onClick={() => void onStop()}
-              disabled={!sessionId}
-              className="h-8 rounded-full bg-red-600 px-4 text-xs font-semibold text-white disabled:opacity-40"
-            >
-              停止
-            </button>
-          ) : (
-            <button
-              onClick={() => void onSend()}
-              disabled={!canSend}
-              className="h-8 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-40"
-            >
-              发送
-            </button>
-          )}
         </div>
+        {isStreaming ? (
+          <button
+            onClick={() => void onStop()}
+            disabled={!sessionId}
+            aria-label="停止"
+            className="order-2 grid size-9 shrink-0 place-items-center rounded-full bg-red-600 text-white transition-transform active:scale-[0.97] disabled:opacity-40 md:order-3"
+          >
+            <span className="block size-2.5 rounded-[2px] bg-white" />
+          </button>
+        ) : (
+          <button
+            onClick={() => void onSend()}
+            disabled={!canSend}
+            aria-label="发送"
+            className="order-2 grid size-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-[0.97] disabled:opacity-30 md:order-3"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path d="M8 12.5V3.5M8 3.5L3.5 8M8 3.5L12.5 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   )
