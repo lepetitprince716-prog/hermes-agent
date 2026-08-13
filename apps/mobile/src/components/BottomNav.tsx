@@ -3,6 +3,8 @@ import { NavLink } from 'react-router'
 const tabs = [
   { to: '/', label: '聊天', icon: '◐' },
   { to: '/projects', label: '项目', icon: '◈' },
+  { to: '/kanban', label: '看板', icon: '▤' },
+  { to: '/stats', label: '统计', icon: '◫' },
   { to: '/sessions', label: '会话', icon: '≡' },
   { to: '/settings', label: '设置', icon: '⚙' },
 ]
