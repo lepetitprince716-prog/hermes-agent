@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@nanostores/react'
-import { Routes, Route, useNavigate, useParams } from 'react-router'
+import { NavLink, Routes, Route, useNavigate, useParams } from 'react-router'
 import { $gatewayState, $gatewayError, $sessions, $sessionsSorted, $selectedSessionId } from '@/store/app'
 import { connectGateway, ensureLiveness, gatewayRequest } from '@/lib/gateway'
 import ChatPage from '@/pages/ChatPage'
@@ -12,6 +12,7 @@ import SettingsPage from '@/pages/SettingsPage'
 import StatsPage from '@/pages/StatsPage'
 import BottomNav from '@/components/BottomNav'
 import { PromptSheet } from '@/components/PromptSheet'
+import { IconChart, IconFolder, IconKanban, IconMenu, IconMessage, IconSessions, IconSettings } from '@/components/icons'
 import { cn } from '@/lib/utils'
 
 function TopBar({ title, right }: { title: string; right?: React.ReactNode }) {
@@ -31,24 +32,54 @@ function GatewayBadge() {
   const dot = state === 'open' ? 'bg-emerald-500' : state === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-zinc-400'
   const label = state === 'open' ? '已连接' : state === 'connecting' ? '连接中' : state === 'error' ? '错误' : '未连接'
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted px-2.5 py-1 text-xs" title={err ?? undefined}>
+    <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/70 px-2.5 py-1 text-xs" title={err ?? undefined}>
       <span className={cn('size-2 rounded-full', dot)} />
       {label}
     </span>
   )
 }
 
+const rail = [
+  { to: '/', label: '聊天', Icon: IconMessage, end: true },
+  { to: '/projects', label: '项目', Icon: IconFolder },
+  { to: '/kanban', label: '看板', Icon: IconKanban },
+  { to: '/stats', label: '统计', Icon: IconChart },
+  { to: '/sessions', label: '会话', Icon: IconSessions },
+  { to: '/settings', label: '设置', Icon: IconSettings },
+]
+
+function SideRail() {
+  return (
+    <aside className="hidden w-16 shrink-0 flex-col items-center border-r bg-card/70 py-3 md:flex">
+      {rail.map(t => (
+        <NavLink
+          key={t.to}
+          to={t.to}
+          end={t.end}
+          title={t.label}
+          className={({ isActive }) =>
+            cn(
+              'mb-1 grid size-10 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+              isActive && 'bg-muted text-foreground',
+            )
+          }
+        >
+          <t.Icon size={18} />
+        </NavLink>
+      ))}
+    </aside>
+  )
+}
+
 export default function App() {
   const [bootTried, setBootTried] = useState(false)
 
-  // auto-connect on mount
   useEffect(() => {
     if (bootTried) return
     setBootTried(true)
     connectGateway().catch(() => {})
   }, [bootTried])
 
-  // iOS 僵尸连接：回前台探活。WKWebView 后台可能静默杀 socket 且不发 close。
   useEffect(() => {
     const onForeground = () => { void ensureLiveness().catch(() => {}) }
     document.addEventListener('visibilitychange', onForeground)
@@ -62,22 +93,25 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <div className="flex flex-1 flex-col">
-        <Routes>
-          <Route path="/" element={<ChatRoute />} />
-          <Route path="/s/:id" element={<ChatRoute />} />
-          <Route path="/projects" element={<><TopBar title="项目" right={<GatewayBadge />} /><ProjectsPage /></>} />
-          <Route path="/projects/:projectId" element={<><TopBar title="文件" right={<GatewayBadge />} /><FilesPage /></>} />
-          <Route path="/kanban" element={<><TopBar title="看板" right={<GatewayBadge />} /><KanbanPage /></>} />
-          <Route path="/stats" element={<><TopBar title="统计" right={<GatewayBadge />} /><StatsPage /></>} />
-          <Route path="/sessions" element={<><TopBar title="会话" right={<GatewayBadge />} /><SessionsPage /></>} />
-          <Route path="/settings" element={<><TopBar title="设置" right={<GatewayBadge />} /><SettingsPage /></>} />
-          <Route path="*" element={<><TopBar title="Hermes" right={<GatewayBadge />} /><ChatRoute /></>} />
-        </Routes>
+    <div className="flex min-h-dvh bg-background">
+      <SideRail />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex flex-1 flex-col">
+          <Routes>
+            <Route path="/" element={<ChatRoute />} />
+            <Route path="/s/:id" element={<ChatRoute />} />
+            <Route path="/projects" element={<><TopBar title="项目" right={<GatewayBadge />} /><ProjectsPage /></>} />
+            <Route path="/projects/:projectId" element={<><TopBar title="文件" right={<GatewayBadge />} /><FilesPage /></>} />
+            <Route path="/kanban" element={<><TopBar title="看板" right={<GatewayBadge />} /><KanbanPage /></>} />
+            <Route path="/stats" element={<><TopBar title="统计" right={<GatewayBadge />} /><StatsPage /></>} />
+            <Route path="/sessions" element={<><TopBar title="会话" right={<GatewayBadge />} /><SessionsPage /></>} />
+            <Route path="/settings" element={<><TopBar title="设置" right={<GatewayBadge />} /><SettingsPage /></>} />
+            <Route path="*" element={<><TopBar title="Hermes" right={<GatewayBadge />} /><ChatRoute /></>} />
+          </Routes>
+        </div>
+        <BottomNav />
+        <PromptSheet />
       </div>
-      <BottomNav />
-      <PromptSheet />
     </div>
   )
 }
@@ -88,20 +122,16 @@ function ChatRoute() {
   const sessions = useStore($sessionsSorted)
   const sid = id ?? null
 
-  // sync selectedSessionId with route
   useEffect(() => { $selectedSessionId.set(sid) }, [sid])
 
-  // when gateway emits session-id, navigate to it (新会话落地)
   useEffect(() => {
     const onSid = (e: Event) => {
       const detail = (e as CustomEvent).detail as { sessionId: string }
       if (detail?.sessionId && detail.sessionId !== sid) {
-        // 刷新列表并切路由
         gatewayRequest('session.list', {}).then((res: unknown) => {
           const list = extractSessions(res)
           if (list.length) $sessions.set(list)
         }).catch(() => {})
-        // 只有在根路径才自动跳转，避免覆盖用户已选会话
         if (!sid) navigate(`/s/${detail.sessionId}`, { replace: true })
       }
     }
@@ -111,18 +141,25 @@ function ChatRoute() {
 
   return (
     <>
-      <div className="safe-top sticky top-0 z-10 border-b bg-card/80 backdrop-blur">
+      <div className="safe-top sticky top-0 z-10 border-b bg-background/70 backdrop-blur">
         <div className="flex h-14 items-center justify-between px-3">
           <button
             onClick={() => navigate('/sessions')}
-            className="rounded-full border bg-muted px-3 py-1.5 text-xs font-medium"
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
           >
-            ☰ 会话 {sessions.length ? `· ${sessions.length}` : ''}
+            <IconMenu />
+            会话 {sessions.length ? `· ${sessions.length}` : ''}
           </button>
+          <div className="hidden text-sm font-medium tracking-tight md:block">Hermes</div>
           <GatewayBadge />
-          <button onClick={() => navigate('/settings')} className="rounded-full border bg-muted px-3 py-1.5 text-xs font-medium">
+          <button
+            onClick={() => navigate('/settings')}
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+          >
+            <IconSettings size={14} />
             设置
           </button>
+          <span className="hidden w-16 md:block" />
         </div>
       </div>
       <ChatPage sessionId={sid} />

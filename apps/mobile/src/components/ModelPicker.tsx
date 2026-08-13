@@ -15,6 +15,7 @@ import {
 } from '@/lib/models'
 import { cn } from '@/lib/utils'
 import { $currentEffort, $currentModel, $currentProvider } from '@/store/app'
+import { IconCheck, IconChevronDown } from '@/components/icons'
 
 export function usePickedModel(): ModelChoice {
   const liveModel = useStore($currentModel)
@@ -100,7 +101,7 @@ export function ModelPicker({
   }
 
   const chipClass = variant === 'inline'
-    ? 'inline-flex h-8 max-w-[11rem] shrink-0 items-center rounded-full px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97]'
+    ? 'inline-flex h-8 max-w-[11rem] shrink-0 items-center gap-0.5 rounded-full px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97]'
     : 'max-w-[42vw] truncate rounded-full border bg-muted px-3 py-1.5 text-xs font-medium'
 
   const sheet = open ? (
@@ -139,7 +140,7 @@ export function ModelPicker({
                     <div className="text-sm font-medium">{EFFORT_LABELS[row]}</div>
                     <div className="mt-0.5 text-[11px] text-muted-foreground">{EFFORT_HINTS[row]}</div>
                   </div>
-                  {row === effort ? <span className="text-sm text-primary">✓</span> : null}
+                  {row === effort ? <IconCheck className="text-primary" /> : null}
                 </button>
               ))}
             </div>
@@ -169,7 +170,7 @@ export function ModelPicker({
                             <div className="text-sm font-medium">{row.label}</div>
                             <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{row.hint}</div>
                           </div>
-                          {active ? <span className="ml-3 text-sm text-primary">✓</span> : null}
+                          {active ? <IconCheck className="ml-3 shrink-0 text-primary" /> : null}
                         </button>
                       )
                     })}
@@ -196,7 +197,7 @@ export function ModelPicker({
           title={`${selected.label} · ${selected.hint}`}
         >
           <span className="truncate">{selected.label}</span>
-          <span className="ml-0.5 shrink-0 opacity-50">▾</span>
+          <IconChevronDown className="shrink-0 opacity-50" />
         </button>
         <button
           type="button"
@@ -206,7 +207,7 @@ export function ModelPicker({
           title={`思考 ${EFFORT_LABELS[effort]}`}
         >
           {EFFORT_LABELS[effort]}
-          <span className="ml-0.5 shrink-0 opacity-50">▾</span>
+          <IconChevronDown className="shrink-0 opacity-50" />
         </button>
       </div>
       {sheet && typeof document !== 'undefined' ? createPortal(sheet, document.body) : null}

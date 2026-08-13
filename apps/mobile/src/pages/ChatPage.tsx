@@ -5,6 +5,7 @@ import { gatewayRequest, interruptSession, sendPrompt } from '@/lib/gateway'
 import { $gatewayState } from '@/store/app'
 import { cn } from '@/lib/utils'
 import { ModelPicker, usePickedEffort, usePickedModel } from '@/components/ModelPicker'
+import { IconArrowUp, IconStop } from '@/components/icons'
 
 const Markdown = lazy(() => import('@/components/Markdown').then(m => ({ default: m.Markdown })))
 
@@ -134,8 +135,8 @@ function Composer({ sessionId }: { sessionId: string | null }) {
   }
 
   return (
-    <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-background/80 px-3 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-1 gap-y-1 rounded-[28px] border border-border/70 bg-card/90 px-2 py-1.5 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03),0_1px_2px_rgba(0,0,0,0.04)] md:flex-nowrap md:rounded-full md:px-3">
+    <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-transparent px-3 pb-3 pt-2 md:bottom-0 md:px-6 md:pb-6">
+      <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-1 gap-y-1 rounded-[28px] border border-black/8 bg-white/80 px-2 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(15,23,42,0.06)] backdrop-blur-md md:flex-nowrap md:rounded-full md:px-3 dark:border-white/10 dark:bg-white/8">
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
@@ -156,7 +157,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
             aria-label="停止"
             className="order-2 grid size-9 shrink-0 place-items-center rounded-full bg-red-600 text-white transition-transform active:scale-[0.97] disabled:opacity-40 md:order-3"
           >
-            <span className="block size-2.5 rounded-[2px] bg-white" />
+            <span className="block"><IconStop /></span>
           </button>
         ) : (
           <button
@@ -165,9 +166,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
             aria-label="发送"
             className="order-2 grid size-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-[0.97] disabled:opacity-30 md:order-3"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-              <path d="M8 12.5V3.5M8 3.5L3.5 8M8 3.5L12.5 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <IconArrowUp />
           </button>
         )}
       </div>
