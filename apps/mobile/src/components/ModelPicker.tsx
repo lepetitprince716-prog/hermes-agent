@@ -132,7 +132,7 @@ export function ModelPicker({
                   type="button"
                   disabled={busy}
                   onClick={() => void pickModel(row)}
-                  className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-muted disabled:opacity-50"
+                  className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-foreground/[0.06] disabled:opacity-50"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium">{row.label}</div>
@@ -145,7 +145,7 @@ export function ModelPicker({
           </section>
         )
       })}
-      <div className="my-1 border-t" />
+      <div className="my-1 border-t border-white/25" />
       <div className="px-3 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">思考深度</div>
       {EFFORTS.map(row => (
         <button
@@ -153,7 +153,7 @@ export function ModelPicker({
           type="button"
           disabled={busy}
           onClick={() => void pickEffort(row)}
-          className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-muted disabled:opacity-50"
+          className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-foreground/[0.06] disabled:opacity-50"
         >
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium">{EFFORT_LABELS[row]}</div>
@@ -168,7 +168,7 @@ export function ModelPicker({
   const popover = open && desktop ? (
     <div
       role="menu"
-      className="absolute bottom-[calc(100%+8px)] right-0 z-[80] w-[280px] overflow-hidden rounded-xl border bg-card py-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)]"
+      className="absolute bottom-[calc(100%+8px)] right-0 z-[80] w-[280px] overflow-hidden rounded-xl border border-white/35 bg-background/20 py-1 shadow-[0_8px_32px_rgba(0,53,253,0.08)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/15"
     >
       {menuBody}
       {err ? <div className="px-3 py-2 text-xs text-red-500">{err}</div> : null}
@@ -177,8 +177,8 @@ export function ModelPicker({
 
   const sheet = open && !desktop ? (
     <div className="fixed inset-0 z-[80] flex flex-col justify-end" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/20" onClick={() => !busy && setOpen(false)} />
-      <div className="safe-bottom relative mx-auto w-full max-h-[80dvh] max-w-[560px] overflow-hidden rounded-t-3xl border-t bg-card shadow-[0_-8px_40px_rgba(15,23,42,0.08)]">
+      <div className="absolute inset-0 bg-primary/8" onClick={() => !busy && setOpen(false)} />
+      <div className="safe-bottom relative mx-auto w-full max-h-[80dvh] max-w-[560px] overflow-hidden rounded-t-3xl border-t border-white/30 bg-background/25 shadow-[0_-8px_40px_rgba(0,53,253,0.06)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/15">
         <div className="mx-auto my-2 h-1 w-9 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pb-1 text-[13px] font-semibold text-muted-foreground">模型和思考</div>
         <div className="min-h-0 flex-1 overflow-y-auto">{menuBody}</div>
