@@ -12,6 +12,7 @@ import SettingsPage from '@/pages/SettingsPage'
 import StatsPage from '@/pages/StatsPage'
 import BottomNav from '@/components/BottomNav'
 import { PromptSheet } from '@/components/PromptSheet'
+import { BrandMark } from '@/components/BrandMark'
 import { IconChart, IconFolder, IconKanban, IconMenu, IconMessage, IconSessions, IconSettings } from '@/components/icons'
 import { cn } from '@/lib/utils'
 
@@ -51,6 +52,7 @@ const rail = [
 function SideRail() {
   return (
     <aside className="hidden w-16 shrink-0 flex-col items-center py-4 md:flex">
+      <BrandMark className="mb-4 size-9 rounded-lg" />
       {rail.map(t => (
         <NavLink
           key={t.to}

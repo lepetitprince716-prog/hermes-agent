@@ -5,6 +5,7 @@ import { gatewayRequest, interruptSession, sendPrompt } from '@/lib/gateway'
 import { $gatewayState } from '@/store/app'
 import { cn } from '@/lib/utils'
 import { ModelPicker, usePickedEffort, usePickedModel } from '@/components/ModelPicker'
+import { BrandMark } from '@/components/BrandMark'
 import { IconArrowUp, IconStop } from '@/components/icons'
 
 const Markdown = lazy(() => import('@/components/Markdown').then(m => ({ default: m.Markdown })))
@@ -65,6 +66,7 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
       <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-3">
         {messages.length === 0 ? (
           <div className="mx-auto flex max-w-[640px] flex-col items-center px-4 pt-[14vh] text-center">
+            <BrandMark className="mb-5 size-16 rounded-xl shadow-[0_8px_24px_rgba(0,53,253,0.08)]" />
             <div className="wordmark text-[clamp(2.4rem,8vw,4.6rem)] text-midground">Hermes Agent</div>
             <p className="mt-4 text-[15px] tracking-tight text-muted-foreground">选好模型和思考深度，直接发就行。</p>
           </div>
