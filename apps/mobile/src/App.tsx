@@ -5,6 +5,8 @@ import { $gatewayState, $gatewayError, $sessions, $sessionsSorted, $selectedSess
 import { connectGateway, gatewayRequest } from '@/lib/gateway'
 import { defaultDashboardUrl, resolveGatewayWsUrl } from '@/lib/gateway-url'
 import ChatPage from '@/pages/ChatPage'
+import FilesPage from '@/pages/FilesPage'
+import ProjectsPage from '@/pages/ProjectsPage'
 import SessionsPage from '@/pages/SessionsPage'
 import SettingsPage from '@/pages/SettingsPage'
 import BottomNav from '@/components/BottomNav'
@@ -49,6 +51,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<ChatRoute />} />
           <Route path="/s/:id" element={<ChatRoute />} />
+          <Route path="/projects" element={<><TopBar title="项目" right={<GatewayBadge />} /><ProjectsPage /></>} />
+          <Route path="/projects/:projectId" element={<><TopBar title="文件" right={<GatewayBadge />} /><FilesPage /></>} />
           <Route path="/sessions" element={<><TopBar title="会话" right={<GatewayBadge />} /><SessionsPage /></>} />
           <Route path="/settings" element={<><TopBar title="设置" right={<GatewayBadge />} /><SettingsPage /></>} />
           <Route path="*" element={<><TopBar title="Hermes" right={<GatewayBadge />} /><ChatRoute /></>} />

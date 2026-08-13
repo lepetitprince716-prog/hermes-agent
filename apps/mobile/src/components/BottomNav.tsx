@@ -2,8 +2,9 @@ import { NavLink } from 'react-router'
 
 const tabs = [
   { to: '/', label: '聊天', icon: '◐' },
+  { to: '/projects', label: '项目', icon: '◈' },
   { to: '/sessions', label: '会话', icon: '≡' },
-  { to: '/settings', label: '设置', icon: '◈' },
+  { to: '/settings', label: '设置', icon: '⚙' },
 ]
 
 export default function BottomNav() {

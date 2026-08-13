@@ -39,8 +39,16 @@ export function normalizeDashboardUrl(input: string): string {
 /**
  * 从 dashboard 首页 HTML 提取 `__HERMES_SESSION_TOKEN__`。
  * loopback（非 gated）模式才注入；gated 模式需走 OAuth ticket（首版不支持，报错提示）。
+ * 模块级缓存 + 401 时调用方清缓存重取。
  */
-export async function fetchSessionToken(dashboardUrl: string): Promise<string> {
+let _tokenCache: { base: string; token: string } | null = null
+
+export function clearSessionTokenCache(): void {
+  _tokenCache = null
+}
+
+export async function fetchSessionToken(dashboardUrl: string, forceRefresh = false): Promise<string> {
+  if (!forceRefresh && _tokenCache?.base === dashboardUrl) return _tokenCache.token
   const res = await fetch(`${dashboardUrl}/`)
   if (!res.ok) throw new Error(`dashboard ${res.status} ${res.statusText}`)
   const html = await res.text()
@@ -51,7 +59,37 @@ export async function fetchSessionToken(dashboardUrl: string): Promise<string> {
     }
     throw new Error('无法从 dashboard 获取会话 token')
   }
+  _tokenCache = { base: dashboardUrl, token: m[1] }
   return m[1]
+}
+
+/** 当前生效的 dashboard http base（连接时写入的 localStorage，否则默认本机） */
+export function currentDashboardBase(): string {
+  return localStorage.getItem('hermes-mobile-dashboard-url') ?? defaultDashboardUrl()
+}
+
+/**
+ * dashboard REST 调用（/api/fs/* 等）：自动带 X-Hermes-Session-Token。
+ * 401 时清 token 缓存重取并重试一次（dashboard 重启会轮换 token）。
+ */
+export async function dashboardApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const base = currentDashboardBase()
+  const doFetch = async (token: string) =>
+    fetch(`${base}${path}`, {
+      ...init,
+      headers: { 'X-Hermes-Session-Token': token, ...(init?.headers ?? {}) },
+    })
+  let token = await fetchSessionToken(base)
+  let res = await doFetch(token)
+  if (res.status === 401) {
+    token = await fetchSessionToken(base, true)
+    res = await doFetch(token)
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`${res.status} ${res.statusText}${detail ? `: ${detail.slice(0, 200)}` : ''}`)
+  }
+  return (await res.json()) as T
 }
 
 /**
