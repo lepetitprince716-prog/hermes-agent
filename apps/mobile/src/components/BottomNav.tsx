@@ -11,20 +11,22 @@ const tabs = [
 
 export default function BottomNav() {
   return (
-    <nav className="safe-bottom sticky bottom-0 z-20 flex h-[56px] items-stretch border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-      {tabs.map(t => (
-        <NavLink
-          key={t.to}
-          to={t.to}
-          end={t.to === '/'}
-          className={({ isActive }) =>
-            `flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] ${isActive ? 'font-semibold text-foreground' : 'text-muted-foreground'}`
-          }
-        >
-          <span className="text-[16px] leading-none">{t.icon}</span>
-          <span>{t.label}</span>
-        </NavLink>
-      ))}
+    <nav className="safe-bottom sticky bottom-0 z-20 border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+      <div className="flex h-14 items-stretch">
+        {tabs.map(t => (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            end={t.to === '/'}
+            className={({ isActive }) =>
+              `flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] ${isActive ? 'font-semibold text-foreground' : 'text-muted-foreground'}`
+            }
+          >
+            <span className="text-[16px] leading-none">{t.icon}</span>
+            <span>{t.label}</span>
+          </NavLink>
+        ))}
+      </div>
     </nav>
   )
 }

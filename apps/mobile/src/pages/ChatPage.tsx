@@ -112,7 +112,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
   }
 
   return (
-    <div className="safe-bottom sticky bottom-[56px] border-t bg-card p-2">
+    <div className="safe-bottom sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] border-t bg-card p-2">
       <div className="mx-auto flex max-w-[720px] items-end gap-2">
         <textarea
           value={text}
@@ -120,7 +120,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void onSend() }
           }}
-          placeholder={gatewayState !== 'open' ? '未连接 gateway…' : '发送消息… (Shift+Enter 换行)'}
+          placeholder={gatewayState !== 'open' ? '未连接 gateway…' : '发送消息…'}
           rows={1}
           className="max-h-28 min-h-10 flex-1 resize-none rounded-2xl border bg-background px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />

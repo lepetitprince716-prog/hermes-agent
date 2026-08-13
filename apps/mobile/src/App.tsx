@@ -17,9 +17,11 @@ import { cn } from '@/lib/utils'
 
 function TopBar({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
-    <div className="safe-top sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-card/80 px-4 backdrop-blur">
-      <h1 className="text-[15px] font-semibold tracking-tight">{title}</h1>
-      <div className="flex items-center gap-2">{right}</div>
+    <div className="safe-top sticky top-0 z-10 border-b bg-card/80 backdrop-blur">
+      <div className="flex h-14 items-center justify-between px-4">
+        <h1 className="text-[15px] font-semibold tracking-tight">{title}</h1>
+        <div className="flex items-center gap-2">{right}</div>
+      </div>
     </div>
   )
 }
@@ -98,17 +100,19 @@ function ChatRoute() {
 
   return (
     <>
-      <div className="safe-top sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-card/80 px-3 backdrop-blur">
-        <button
-          onClick={() => navigate('/sessions')}
-          className="rounded-full border bg-muted px-3 py-1.5 text-xs font-medium"
-        >
-          ☰ 会话 {sessions.length ? `· ${sessions.length}` : ''}
-        </button>
-        <GatewayBadge />
-        <button onClick={() => navigate('/settings')} className="rounded-full border bg-muted px-3 py-1.5 text-xs font-medium">
-          设置
-        </button>
+      <div className="safe-top sticky top-0 z-10 border-b bg-card/80 backdrop-blur">
+        <div className="flex h-14 items-center justify-between px-3">
+          <button
+            onClick={() => navigate('/sessions')}
+            className="rounded-full border bg-muted px-3 py-1.5 text-xs font-medium"
+          >
+            ☰ 会话 {sessions.length ? `· ${sessions.length}` : ''}
+          </button>
+          <GatewayBadge />
+          <button onClick={() => navigate('/settings')} className="rounded-full border bg-muted px-3 py-1.5 text-xs font-medium">
+            设置
+          </button>
+        </div>
       </div>
       <ChatPage sessionId={sid} />
     </>
