@@ -6,16 +6,16 @@ export const DEFAULT_EFFORT: Effort = 'medium'
 export const EFFORT_LABELS: Record<Effort, string> = {
   none: '关闭',
   low: '快速',
-  medium: '标准',
-  high: '深度',
+  medium: '自动',
+  high: '专家',
   max: '极限',
 }
 
 export const EFFORT_HINTS: Record<Effort, string> = {
   none: '不走思考，直接答',
-  low: '优先速度',
-  medium: '日常默认',
-  high: '复杂推理',
+  low: '更快回复',
+  medium: '按任务在快速和专家之间选',
+  high: '认真想 · 复杂推理',
   max: '尽量想透',
 }
 

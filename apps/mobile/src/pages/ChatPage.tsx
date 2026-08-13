@@ -64,9 +64,9 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
     <div className="flex flex-1 flex-col">
       <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-3">
         {messages.length === 0 ? (
-          <div className="mx-auto flex max-w-[520px] flex-col items-center px-4 pt-[12vh] text-center">
-            <div className="text-[28px] font-semibold tracking-tight">Hermes</div>
-            <p className="mt-2 text-sm text-muted-foreground">选好模型和思考深度，直接发就行。</p>
+          <div className="mx-auto flex max-w-[640px] flex-col items-center px-4 pt-[14vh] text-center">
+            <div className="wordmark text-[clamp(2.4rem,8vw,4.6rem)] text-midground">Hermes Agent</div>
+            <p className="mt-4 text-[15px] tracking-tight text-muted-foreground">选好模型和思考深度，直接发就行。</p>
           </div>
         ) : (
           <div className="mx-auto flex max-w-[720px] flex-col gap-3">
@@ -74,10 +74,10 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
               <div
                 key={m.id}
                 className={cn(
-                  'rounded-2xl border px-3.5 py-2.5 text-[14px] leading-6',
-                  m.role === 'user' ? 'self-end max-w-[85%] chat-user-bubble' : 'bg-card',
-                  m.role === 'tool' ? 'border-dashed bg-muted/50 font-mono text-xs' : null,
-                  m.error ? 'border-red-300' : null,
+                  'px-1 py-2 text-[15px] leading-6',
+                  m.role === 'user' ? 'self-end max-w-[85%] text-right' : '',
+                  m.role === 'tool' ? 'font-mono text-xs text-muted-foreground' : null,
+                  m.error ? 'text-red-500' : null,
                 )}
               >
                 {m.thinking ? (
@@ -136,7 +136,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
 
   return (
     <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-transparent px-3 pb-3 pt-2 md:bottom-0 md:px-6 md:pb-6">
-      <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-1 gap-y-1 rounded-[28px] border border-black/8 bg-white/80 px-2 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(15,23,42,0.06)] backdrop-blur-md md:flex-nowrap md:rounded-full md:px-3 dark:border-white/10 dark:bg-white/8">
+      <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-x-1 gap-y-1 rounded-full bg-black/[0.035] px-2 py-1.5 md:flex-nowrap md:px-3 dark:bg-white/[0.06]">
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}

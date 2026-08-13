@@ -13,7 +13,7 @@ const tabs = [
 
 export default function BottomNav() {
   return (
-    <nav className="safe-bottom sticky bottom-0 z-20 border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 md:hidden">
+    <nav className="safe-bottom sticky bottom-0 z-20 bg-transparent md:hidden">
       <div className="flex h-14 items-stretch">
         {tabs.map(t => (
           <NavLink

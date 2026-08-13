@@ -49,20 +49,20 @@ const modelSheet = await page.evaluate(() => {
   }
 })
 await page.screenshot({ path: '/tmp/mobile-model-picker.png', fullPage: true })
-await page.getByRole('button', { name: '关闭' }).click()
+await page.keyboard.press('Escape')
 await page.waitForTimeout(250)
 
 await page.locator('[data-testid="effort-chip"]').click()
 await page.waitForTimeout(400)
 const effortSheet = await page.evaluate(() => {
-  const dialog = document.querySelector('[role="dialog"]')
-  const rows = Array.from(dialog?.querySelectorAll('button') ?? [])
+  const dialog = document.querySelector('[role="dialog"], [role="menu"]')
+  const rows = Array.from((dialog ?? document).querySelectorAll('button'))
     .map(el => el.textContent?.replace(/\s+/g, ' ').trim())
     .filter(t => t && t !== '关闭')
   return {
     open: Boolean(dialog),
-    heading: dialog?.querySelector('.font-semibold')?.textContent?.trim() ?? null,
-    rows,
+    heading: dialog?.querySelector('.font-medium, .font-semibold')?.textContent?.trim() ?? null,
+    rows: rows.slice(0, 8),
   }
 })
 await page.screenshot({ path: '/tmp/mobile-effort-picker.png', fullPage: true })

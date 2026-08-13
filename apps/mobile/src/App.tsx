@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 
 function TopBar({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
-    <div className="safe-top sticky top-0 z-10 border-b bg-card/80 backdrop-blur">
+    <div className="safe-top sticky top-0 z-10 bg-transparent">
       <div className="flex h-14 items-center justify-between px-4">
         <h1 className="text-[15px] font-semibold tracking-tight">{title}</h1>
         <div className="flex items-center gap-2">{right}</div>
@@ -32,7 +32,7 @@ function GatewayBadge() {
   const dot = state === 'open' ? 'bg-emerald-500' : state === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-zinc-400'
   const label = state === 'open' ? '已连接' : state === 'connecting' ? '连接中' : state === 'error' ? '错误' : '未连接'
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/70 px-2.5 py-1 text-xs" title={err ?? undefined}>
+    <span className="inline-flex items-center gap-1.5 px-1 py-1 text-xs text-muted-foreground" title={err ?? undefined}>
       <span className={cn('size-2 rounded-full', dot)} />
       {label}
     </span>
@@ -50,7 +50,7 @@ const rail = [
 
 function SideRail() {
   return (
-    <aside className="hidden w-16 shrink-0 flex-col items-center border-r bg-card/70 py-3 md:flex">
+    <aside className="hidden w-16 shrink-0 flex-col items-center py-4 md:flex">
       {rail.map(t => (
         <NavLink
           key={t.to}
@@ -141,7 +141,7 @@ function ChatRoute() {
 
   return (
     <>
-      <div className="safe-top sticky top-0 z-10 border-b bg-background/70 backdrop-blur">
+      <div className="safe-top sticky top-0 z-10 bg-transparent">
         <div className="flex h-14 items-center justify-between px-3">
           <button
             onClick={() => navigate('/sessions')}
@@ -150,7 +150,7 @@ function ChatRoute() {
             <IconMenu />
             会话 {sessions.length ? `· ${sessions.length}` : ''}
           </button>
-          <div className="hidden text-sm font-medium tracking-tight md:block">Hermes</div>
+          <div className="wordmark hidden text-[13px] text-midground md:block">Hermes</div>
           <GatewayBadge />
           <button
             onClick={() => navigate('/settings')}
