@@ -665,6 +665,14 @@ async def _dashboard_auth_gate(request: Request, call_next):
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """Require the session token on all /api/ routes except the public list."""
+    # CORS preflight (OPTIONS) never carries credentials by design — rejecting
+    # it with 401 makes every cross-origin browser client (e.g. the mobile
+    # web build served from a different localhost port) fail with a bare
+    # "Failed to fetch". The CORSMiddleware answers preflights itself; let
+    # them through unconditionally. Actual GET/POST requests still require
+    # the session token below.
+    if request.method == "OPTIONS":
+        return await call_next(request)
     # A request already authenticated by the token-auth seam (a service caller
     # presenting a bearer token on a registered token route) carries
     # ``token_authenticated`` — never bounce it through the cookie/session gate.
