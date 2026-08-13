@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ── Desktop Nous 主题的 CSS 变量映射 ──────────────────────────────────────
+   与 desktop styles.css 的 @theme inline 完全一致：mobile 的 --dt-* 变量
+   直接映射到 Tailwind 的 --color-* token，组件里 bg-card/ text-primary 等
+   自动吃主题色，无需 hardcode。
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@theme inline {
+  --color-background: var(--dt-background);
+  --color-foreground: var(--dt-foreground);
+  --color-card: var(--dt-card);
+  --color-card-foreground: var(--dt-card-foreground);
+  --color-muted: var(--dt-muted);
+  --color-muted-foreground: var(--dt-muted-foreground);
+  --color-popover: var(--dt-popover);
+  --color-popover-foreground: var(--dt-popover-foreground);
+  --color-primary: var(--dt-primary);
+  --color-primary-foreground: var(--dt-primary-foreground);
+  --color-secondary: var(--dt-secondary);
+  --color-secondary-foreground: var(--dt-secondary-foreground);
+  --color-accent: var(--dt-accent);
+  --color-accent-foreground: var(--dt-accent-foreground);
+  --color-border: var(--dt-border);
+  --color-input: var(--dt-input);
+  --color-ring: var(--dt-ring);
+  --color-destructive: var(--dt-destructive);
+  --color-destructive-foreground: var(--dt-destructive-foreground);
+  --color-midground: var(--dt-midground);
+
+  --color-sidebar-ring: var(--dt-sidebar-ring, var(--dt-ring));
+  --color-sidebar-border: var(--dt-sidebar-border, var(--dt-border));
+  --color-sidebar-accent: var(--dt-sidebar-background);
+  --color-sidebar-accent-foreground: var(--dt-sidebar-foreground, var(--dt-foreground));
+  --color-sidebar-primary: var(--dt-sidebar-background);
+  --color-sidebar-primary-foreground: var(--dt-sidebar-foreground, var(--dt-foreground));
+  --color-sidebar-foreground: var(--dt-sidebar-foreground, var(--dt-foreground));
+  --color-sidebar: var(--dt-sidebar-background);
+
+  --font-mono: var(--dt-font-mono);
+
+  --radius-xs: calc(var(--radius) * 0.125);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.625);
+  --radius-lg: calc(var(--radius) * 0.75);
+  --radius-xl: calc(var(--radius) * 1.25);
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+    /* Nous light fallback — 未 initTheme 时也有接近的样子 */
+    --dt-background: #F8FAFF;
+    --dt-foreground: #17171A;
+    --dt-card: #FFFFFF;
+    --dt-card-foreground: #17171A;
+    --dt-muted: #F4F8FF;
+    --dt-muted-foreground: #666678;
+    --dt-popover: #FFFFFF;
+    --dt-popover-foreground: #17171A;
+    --dt-primary: #0053FD;
+    --dt-primary-foreground: #FCFCFC;
+    --dt-secondary: #F1F6FF;
+    --dt-secondary-foreground: #242432;
+    --dt-accent: #E5EDFF;
+    --dt-accent-foreground: #202030;
+    --dt-border: color-mix(in srgb, #0053FD 22%, transparent);
+    --dt-input: color-mix(in srgb, #0053FD 30%, transparent);
+    --dt-ring: #0053FD;
+    --dt-midground: #0053FD;
+    --dt-destructive: #C72E4D;
+    --dt-destructive-foreground: #FFFFFF;
+    --dt-sidebar-background: #F3F7FF;
+    --dt-sidebar-border: color-mix(in srgb, #0053FD 18%, transparent);
+    --dt-user-bubble: color-mix(in srgb, #0053FD 6%, #FFFFFF);
+    --dt-user-bubble-border: color-mix(in srgb, #0053FD 24%, transparent);
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  * { border-color: var(--dt-border); }
+
+  body {
+    background: var(--dt-background);
+    color: var(--dt-foreground);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  /* 用户消息气泡 —— desktop 的 --userBubble */
+  .chat-user-bubble {
+    background: var(--dt-user-bubble);
+    border-color: var(--dt-user-bubble-border);
+    color: var(--dt-foreground);
+  }
+
+  /* 选中色 —— Nous 蓝 */
+  ::selection {
+    background: color-mix(in srgb, var(--dt-primary) 22%, transparent);
+  }
+}
+
+/* safe area */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-left { padding-left: env(safe-area-inset-left); }
+.safe-right { padding-right: env(safe-area-inset-right); }
+
+/* scrollbar —— desktop 的细滚动条风格 */
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--dt-foreground) 12%, transparent); border-radius: 999px; }
+*::-webkit-scrollbar-track { background: transparent; }
