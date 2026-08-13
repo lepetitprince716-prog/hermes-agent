@@ -37,6 +37,7 @@ export const $gatewayError = atom<string | null>(null)
 export const $composerText = atom('')
 export const $currentModel = atom('')
 export const $currentProvider = atom('')
+export const $currentEffort = atom('medium')
 
 export const $selectedSession = computed([$sessions, $selectedSessionId], (sessions, id) =>
   id ? (sessions.find(s => s.id === id) ?? null) : null

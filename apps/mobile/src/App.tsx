@@ -11,7 +11,6 @@ import SessionsPage from '@/pages/SessionsPage'
 import SettingsPage from '@/pages/SettingsPage'
 import StatsPage from '@/pages/StatsPage'
 import BottomNav from '@/components/BottomNav'
-import { ModelPicker } from '@/components/ModelPicker'
 import { PromptSheet } from '@/components/PromptSheet'
 import { cn } from '@/lib/utils'
 
@@ -121,7 +120,9 @@ function ChatRoute() {
             ☰ 会话 {sessions.length ? `· ${sessions.length}` : ''}
           </button>
           <GatewayBadge />
-          <ModelPicker sessionId={sid} />
+          <button onClick={() => navigate('/settings')} className="rounded-full border bg-muted px-3 py-1.5 text-xs font-medium">
+            设置
+          </button>
         </div>
       </div>
       <ChatPage sessionId={sid} />

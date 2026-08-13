@@ -1,7 +1,7 @@
 import { JsonRpcGatewayClient, type GatewayEvent, type ConnectionState } from '@hermes/shared'
 
 import { resolveGatewayWsUrl, normalizeDashboardUrl, defaultDashboardUrl } from '@/lib/gateway-url'
-import { $currentModel, $currentProvider, $gatewayError, $gatewayState, $isStreaming, $messages, type ChatMessage } from '@/store/app'
+import { $currentEffort, $currentModel, $currentProvider, $gatewayError, $gatewayState, $isStreaming, $messages, type ChatMessage } from '@/store/app'
 
 let client: JsonRpcGatewayClient | null = null
 let currentWsUrl: string | null = null
@@ -104,8 +104,10 @@ function handleEvent(ev: GatewayEvent): void {
   if (type === 'session.info') {
     const model = typeof p.model === 'string' ? p.model : ''
     const provider = typeof p.provider === 'string' ? p.provider : ''
+    const effort = typeof p.reasoning_effort === 'string' ? p.reasoning_effort : ''
     if (model) $currentModel.set(model)
     if (provider) $currentProvider.set(provider)
+    if (effort) $currentEffort.set(effort)
     return
   }
 
@@ -226,13 +228,14 @@ function extractCreatedSessionId(res: unknown): string | null {
 export async function sendPrompt(
   sessionId: string | null,
   text: string,
-  model?: { provider: string; model: string } | null,
+  opts?: { provider?: string; model?: string; effort?: string } | null,
 ): Promise<{ session_id: string }> {
   let sid = sessionId
   if (!sid) {
     const created = await gatewayRequest('session.create', {
       source: 'mobile',
-      ...(model?.model ? { model: model.model, provider: model.provider } : {}),
+      ...(opts?.model ? { model: opts.model, provider: opts.provider } : {}),
+      ...(opts?.effort ? { reasoning_effort: opts.effort } : {}),
     })
     sid = extractCreatedSessionId(created)
     if (!sid) throw new Error('session.create 未返回 session_id')
@@ -252,5 +255,13 @@ export async function applySessionModel(sessionId: string, provider: string, mod
     session_id: sessionId,
     key: 'model',
     value: `${model} --provider ${provider} --session`,
+  })
+}
+
+export async function applySessionEffort(sessionId: string, effort: string): Promise<void> {
+  await gatewayRequest('config.set', {
+    session_id: sessionId,
+    key: 'reasoning',
+    value: effort,
   })
 }

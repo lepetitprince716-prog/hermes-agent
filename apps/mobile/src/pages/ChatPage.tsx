@@ -1,10 +1,10 @@
 import { useStore } from '@nanostores/react'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { $currentModel, $currentProvider, $isStreaming, $messages, type ChatMessage } from '@/store/app'
+import { $currentEffort, $currentModel, $currentProvider, $isStreaming, $messages, type ChatMessage } from '@/store/app'
 import { gatewayRequest, interruptSession, sendPrompt } from '@/lib/gateway'
 import { $gatewayState } from '@/store/app'
 import { cn } from '@/lib/utils'
-import { usePickedModel } from '@/components/ModelPicker'
+import { ModelPicker, usePickedEffort, usePickedModel } from '@/components/ModelPicker'
 
 const Markdown = lazy(() => import('@/components/Markdown').then(m => ({ default: m.Markdown })))
 
@@ -32,8 +32,10 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
         const info = (r.info && typeof r.info === 'object') ? r.info as Record<string, unknown> : r
         const model = typeof info.model === 'string' ? info.model : ''
         const provider = typeof info.provider === 'string' ? info.provider : ''
+        const effort = typeof info.reasoning_effort === 'string' ? info.reasoning_effort : ''
         if (model) $currentModel.set(model)
         if (provider) $currentProvider.set(provider)
+        if (effort) $currentEffort.set(effort)
         const history = (r.messages ?? r.history ?? (r.result as Record<string, unknown> | undefined)?.messages ?? []) as Array<{
           role: string
           content: string
@@ -110,6 +112,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
   const gatewayState = useStore($gatewayState)
   const isStreaming = useStore($isStreaming)
   const picked = usePickedModel()
+  const effort = usePickedEffort()
   const [text, setText] = useState('')
   const canSend = text.trim().length > 0 && gatewayState === 'open' && !isStreaming
 
@@ -119,7 +122,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
     $messages.set([...$messages.get(), { id: `${Date.now()}`, role: 'user', content: t } as ChatMessage])
     setText('')
     try {
-      await sendPrompt(sessionId, t, { provider: picked.provider, model: picked.model })
+      await sendPrompt(sessionId, t, { provider: picked.provider, model: picked.model, effort })
     } catch (e) {
       $messages.set([
         ...$messages.get(),
@@ -136,38 +139,39 @@ function Composer({ sessionId }: { sessionId: string | null }) {
   }
 
   return (
-    <div className="safe-bottom sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] border-t bg-card p-2">
-      <div className="mx-auto flex max-w-[720px] items-end gap-2">
+    <div className="safe-bottom sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-background px-3 pb-2 pt-1">
+      <div className="mx-auto max-w-[720px] rounded-[22px] border bg-card px-3 py-2 shadow-sm">
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void onSend() }
           }}
-          placeholder={gatewayState !== 'open' ? '未连接 gateway…' : '发送消息…'}
+          placeholder={gatewayState !== 'open' ? '未连接 gateway…' : '发消息…'}
           rows={1}
-          className="max-h-28 min-h-10 flex-1 resize-none rounded-2xl border bg-background px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="max-h-28 min-h-10 w-full resize-none bg-transparent px-1 py-1.5 text-sm outline-none"
         />
-        {isStreaming ? (
-          <button
-            onClick={() => void onStop()}
-            disabled={!sessionId}
-            className="h-10 rounded-full bg-red-600 px-5 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            停止
-          </button>
-        ) : (
-          <button
-            onClick={() => void onSend()}
-            disabled={!canSend}
-            className="h-10 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-          >
-            发送
-          </button>
-        )}
-      </div>
-      <div className="mx-auto max-w-[720px] px-1 pt-1 text-[11px] text-muted-foreground">
-        {picked.hint} · {picked.model} {isStreaming ? '· 生成中…' : ''} {sessionId ? `· ${sessionId.slice(0, 8)}` : '· 新会话'}
+        <div className="flex items-center gap-2 pt-1">
+          <ModelPicker sessionId={sessionId} variant="inline" />
+          <div className="flex-1" />
+          {isStreaming ? (
+            <button
+              onClick={() => void onStop()}
+              disabled={!sessionId}
+              className="h-8 rounded-full bg-red-600 px-4 text-xs font-semibold text-white disabled:opacity-40"
+            >
+              停止
+            </button>
+          ) : (
+            <button
+              onClick={() => void onSend()}
+              disabled={!canSend}
+              className="h-8 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-40"
+            >
+              发送
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
