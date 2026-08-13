@@ -1,7 +1,7 @@
 import { JsonRpcGatewayClient, type GatewayEvent, type ConnectionState } from '@hermes/shared'
 
 import { resolveGatewayWsUrl, normalizeDashboardUrl, defaultDashboardUrl } from '@/lib/gateway-url'
-import { $gatewayError, $gatewayState, $isStreaming, $messages, type ChatMessage } from '@/store/app'
+import { $currentModel, $currentProvider, $gatewayError, $gatewayState, $isStreaming, $messages, type ChatMessage } from '@/store/app'
 
 let client: JsonRpcGatewayClient | null = null
 let currentWsUrl: string | null = null
@@ -98,6 +98,14 @@ function handleEvent(ev: GatewayEvent): void {
     const question = (p.question as string) ?? (p.prompt as string) ?? (p.command as string) ?? JSON.stringify(p).slice(0, 500)
     const label = type === 'clarify.request' ? '需要确认' : type === 'approval.request' ? '危险操作确认' : '需要输入'
     window.dispatchEvent(new CustomEvent('hermes:prompt', { detail: { type, label, question, payload: p, sessionId: sid } }))
+    return
+  }
+
+  if (type === 'session.info') {
+    const model = typeof p.model === 'string' ? p.model : ''
+    const provider = typeof p.provider === 'string' ? p.provider : ''
+    if (model) $currentModel.set(model)
+    if (provider) $currentProvider.set(provider)
     return
   }
 
@@ -215,10 +223,17 @@ function extractCreatedSessionId(res: unknown): string | null {
 }
 
 /** 无 session 时先 session.create 再 prompt.submit，避免 session not found。 */
-export async function sendPrompt(sessionId: string | null, text: string): Promise<{ session_id: string }> {
+export async function sendPrompt(
+  sessionId: string | null,
+  text: string,
+  model?: { provider: string; model: string } | null,
+): Promise<{ session_id: string }> {
   let sid = sessionId
   if (!sid) {
-    const created = await gatewayRequest('session.create', {})
+    const created = await gatewayRequest('session.create', {
+      source: 'mobile',
+      ...(model?.model ? { model: model.model, provider: model.provider } : {}),
+    })
     sid = extractCreatedSessionId(created)
     if (!sid) throw new Error('session.create 未返回 session_id')
     window.dispatchEvent(new CustomEvent('hermes:session-id', { detail: { sessionId: sid } }))
@@ -229,4 +244,13 @@ export async function sendPrompt(sessionId: string | null, text: string): Promis
 
 export async function interruptSession(sessionId: string): Promise<void> {
   await gatewayRequest('session.interrupt', { session_id: sessionId })
+}
+
+/** 已有会话：跟 desktop 一样走 config.set，只改这一局，不写 profile 默认。 */
+export async function applySessionModel(sessionId: string, provider: string, model: string): Promise<void> {
+  await gatewayRequest('config.set', {
+    session_id: sessionId,
+    key: 'model',
+    value: `${model} --provider ${provider} --session`,
+  })
 }

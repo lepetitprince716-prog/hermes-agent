@@ -1,9 +1,10 @@
 import { useStore } from '@nanostores/react'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { $isStreaming, $messages, type ChatMessage } from '@/store/app'
+import { $currentModel, $currentProvider, $isStreaming, $messages, type ChatMessage } from '@/store/app'
 import { gatewayRequest, interruptSession, sendPrompt } from '@/lib/gateway'
 import { $gatewayState } from '@/store/app'
 import { cn } from '@/lib/utils'
+import { usePickedModel } from '@/components/ModelPicker'
 
 const Markdown = lazy(() => import('@/components/Markdown').then(m => ({ default: m.Markdown })))
 
@@ -28,6 +29,11 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
       .then((res: unknown) => {
         if (cancelled) return
         const r = res as Record<string, unknown>
+        const info = (r.info && typeof r.info === 'object') ? r.info as Record<string, unknown> : r
+        const model = typeof info.model === 'string' ? info.model : ''
+        const provider = typeof info.provider === 'string' ? info.provider : ''
+        if (model) $currentModel.set(model)
+        if (provider) $currentProvider.set(provider)
         const history = (r.messages ?? r.history ?? (r.result as Record<string, unknown> | undefined)?.messages ?? []) as Array<{
           role: string
           content: string
@@ -103,6 +109,7 @@ export default function ChatPage({ sessionId }: { sessionId: string | null }) {
 function Composer({ sessionId }: { sessionId: string | null }) {
   const gatewayState = useStore($gatewayState)
   const isStreaming = useStore($isStreaming)
+  const picked = usePickedModel()
   const [text, setText] = useState('')
   const canSend = text.trim().length > 0 && gatewayState === 'open' && !isStreaming
 
@@ -112,7 +119,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
     $messages.set([...$messages.get(), { id: `${Date.now()}`, role: 'user', content: t } as ChatMessage])
     setText('')
     try {
-      await sendPrompt(sessionId, t)
+      await sendPrompt(sessionId, t, { provider: picked.provider, model: picked.model })
     } catch (e) {
       $messages.set([
         ...$messages.get(),
@@ -160,7 +167,7 @@ function Composer({ sessionId }: { sessionId: string | null }) {
         )}
       </div>
       <div className="mx-auto max-w-[720px] px-1 pt-1 text-[11px] text-muted-foreground">
-        WS: {gatewayState} {isStreaming ? '· 生成中…' : ''} {sessionId ? `· ${sessionId.slice(0, 8)}` : '· 新会话'}
+        {picked.hint} · {picked.model} {isStreaming ? '· 生成中…' : ''} {sessionId ? `· ${sessionId.slice(0, 8)}` : '· 新会话'}
       </div>
     </div>
   )

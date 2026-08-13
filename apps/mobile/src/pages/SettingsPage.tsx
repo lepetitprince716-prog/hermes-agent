@@ -84,7 +84,7 @@ export default function SettingsPage() {
       <section className="rounded-2xl border bg-card p-4">
         <h2 className="text-sm font-semibold">关于</h2>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          Hermes Mobile v0.2 · 复用 <code>apps/shared</code> 的 <code>JsonRpcGatewayClient</code>，与 desktop 同一 gateway 同一协议。已有：聊天/流式/停止、会话、项目与文件、看板、tokenstats、Nous 主题。真机走页面同源 <code>/_dash</code> 代理，不必手填 9119。后续增量：终端 pane、插件、推送。
+          Hermes Mobile v0.2 · 复用 <code>apps/shared</code> 的 <code>JsonRpcGatewayClient</code>，与 desktop 同一 gateway 同一协议。已有：聊天/流式/停止、会话、项目与文件、看板、tokenstats、Nous 主题、精选模型切换。真机走页面同源 <code>/_dash</code> 代理，不必手填 9119。后续增量：终端 pane、插件、推送。
         </p>
       </section>
     </div>

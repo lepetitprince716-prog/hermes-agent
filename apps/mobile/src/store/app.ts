@@ -35,6 +35,8 @@ export const $isStreaming = atom(false)
 export const $gatewayState = atom<'idle' | 'connecting' | 'open' | 'closed' | 'error'>('idle')
 export const $gatewayError = atom<string | null>(null)
 export const $composerText = atom('')
+export const $currentModel = atom('')
+export const $currentProvider = atom('')
 
 export const $selectedSession = computed([$sessions, $selectedSessionId], (sessions, id) =>
   id ? (sessions.find(s => s.id === id) ?? null) : null
