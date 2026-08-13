@@ -1,10 +1,12 @@
 import { JsonRpcGatewayClient, type GatewayEvent, type ConnectionState } from '@hermes/shared'
 
-import { resolveGatewayWsUrl, normalizeDashboardUrl } from '@/lib/gateway-url'
+import { resolveGatewayWsUrl, normalizeDashboardUrl, defaultDashboardUrl } from '@/lib/gateway-url'
 import { $gatewayError, $gatewayState, $isStreaming, $messages, type ChatMessage } from '@/store/app'
 
 let client: JsonRpcGatewayClient | null = null
 let currentWsUrl: string | null = null
+let lastDashboardInput: string | null = null
+let connectPromise: Promise<void> | null = null
 let unsubState: (() => void) | null = null
 let unsubEvent: (() => void) | null = null
 
@@ -116,14 +118,17 @@ export function getGatewayClient(): JsonRpcGatewayClient {
   return ensureClient()
 }
 
-export async function connectGateway(wsUrlOrDashboard: string): Promise<void> {
+async function doConnect(wsUrlOrDashboard: string): Promise<void> {
   const c = ensureClient()
   $gatewayState.set('connecting')
   $gatewayError.set(null)
   try {
     const wsUrl = await resolveGatewayWsUrl(wsUrlOrDashboard)
     currentWsUrl = wsUrl
-    localStorage.setItem('hermes-mobile-dashboard-url', normalizeDashboardUrl(wsUrlOrDashboard))
+    if (wsUrlOrDashboard) lastDashboardInput = wsUrlOrDashboard
+    if (wsUrlOrDashboard) {
+      localStorage.setItem('hermes-mobile-dashboard-url', normalizeDashboardUrl(wsUrlOrDashboard))
+    }
     await c.connect(wsUrl)
   } catch (error) {
     $gatewayState.set('error')
@@ -132,9 +137,21 @@ export async function connectGateway(wsUrlOrDashboard: string): Promise<void> {
   }
 }
 
+/** 单飞 connect：并发调用共享同一个 promise，避免双连撞车。不传参则自动探测（vite/隧道走 /_dash）。 */
+export async function connectGateway(wsUrlOrDashboard?: string): Promise<void> {
+  const input = wsUrlOrDashboard?.trim() || ''
+  if (input) lastDashboardInput = input
+  if (client?.connectionState === 'open') return
+  if (connectPromise) return connectPromise
+  connectPromise = doConnect(input).finally(() => {
+    connectPromise = null
+  })
+  return connectPromise
+}
+
 export function disconnectGateway(): void {
   if (client) {
-    try { client.close() } catch {}
+    try { client.close() } catch { /* ignore */ }
   }
   $gatewayState.set('closed')
   $isStreaming.set(false)
@@ -143,19 +160,44 @@ export function disconnectGateway(): void {
   unsubState = null
   unsubEvent = null
   client = null
+  currentWsUrl = null
 }
 
 export function gatewayState(): ConnectionState {
   return (client?.connectionState as ConnectionState) ?? 'idle'
 }
 
+/**
+ * iOS / 后台回前台探活。WKWebView 可能静默杀 socket 且不发 close。
+ * 非 open → 重连；open → 3s 短超时 RPC，失败则强制 close+重连。
+ */
+export async function ensureLiveness(): Promise<void> {
+  const input = lastDashboardInput ?? defaultDashboardUrl()
+  const state = client?.connectionState ?? $gatewayState.get()
+  if (state !== 'open' || !client) {
+    await connectGateway(input)
+    return
+  }
+  try {
+    await client.request('session.list', {}, 3000)
+  } catch {
+    disconnectGateway()
+    await connectGateway(input)
+  }
+}
+
 export async function gatewayRequest<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  if (connectPromise) await connectPromise
   const c = ensureClient()
   if (c.connectionState !== 'open') {
-    if (currentWsUrl) await c.connect(currentWsUrl)
-    else throw new Error('gateway not connected')
+    const input = lastDashboardInput ?? currentWsUrl ?? defaultDashboardUrl()
+    await connectGateway(input)
   }
-  return (await c.request(method, params)) as T
+  const ready = client
+  if (!ready || ready.connectionState !== 'open') {
+    throw new Error('gateway not connected')
+  }
+  return await ready.request<T>(method, params)
 }
 
 export async function listSessions(): Promise<unknown> {
@@ -164,7 +206,27 @@ export async function listSessions(): Promise<unknown> {
 export async function resumeSession(sessionId: string): Promise<unknown> {
   return gatewayRequest('session.resume', { session_id: sessionId })
 }
-export async function sendPrompt(sessionId: string | null, text: string): Promise<unknown> {
-  if (sessionId) return gatewayRequest('prompt.submit', { session_id: sessionId, text })
-  return gatewayRequest('prompt.submit', { text })
+
+function extractCreatedSessionId(res: unknown): string | null {
+  if (!res || typeof res !== 'object') return null
+  const r = res as Record<string, unknown>
+  const id = r.session_id ?? r.stored_session_id
+  return typeof id === 'string' && id ? id : null
+}
+
+/** 无 session 时先 session.create 再 prompt.submit，避免 session not found。 */
+export async function sendPrompt(sessionId: string | null, text: string): Promise<{ session_id: string }> {
+  let sid = sessionId
+  if (!sid) {
+    const created = await gatewayRequest('session.create', {})
+    sid = extractCreatedSessionId(created)
+    if (!sid) throw new Error('session.create 未返回 session_id')
+    window.dispatchEvent(new CustomEvent('hermes:session-id', { detail: { sessionId: sid } }))
+  }
+  await gatewayRequest('prompt.submit', { session_id: sid, text })
+  return { session_id: sid }
+}
+
+export async function interruptSession(sessionId: string): Promise<void> {
+  await gatewayRequest('session.interrupt', { session_id: sessionId })
 }

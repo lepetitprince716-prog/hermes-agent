@@ -7,6 +7,7 @@ import {
   subscribeKanbanEvents, switchBoard,
 } from '@/lib/kanban'
 import { cn, formatRelativeTime } from '@/lib/utils'
+import { $gatewayState } from '@/store/app'
 import {
   $kanbanBoards, $kanbanColumns, $kanbanCurrentBoard, $kanbanError, $kanbanLoading, $kanbanRefreshedAt,
 } from '@/store/kanban'
@@ -25,6 +26,7 @@ const COLUMN_ACCENT: Record<KanbanStatus, string> = {
 }
 
 export default function KanbanPage() {
+  const gatewayState = useStore($gatewayState)
   const boards = useStore($kanbanBoards)
   const current = useStore($kanbanCurrentBoard)
   const columns = useStore($kanbanColumns)
@@ -121,13 +123,14 @@ export default function KanbanPage() {
     }
   }, [])
 
-  // 首次加载：先拿 boards 再拉当前看板
+  // 首次加载：先等 dashboard token 通道可用（gateway open 后 /_dash 也通了）
   useEffect(() => {
+    if (gatewayState !== 'open') return
     void (async () => {
       const cur = await refreshBoards()
       await refresh(cur)
     })()
-  }, [refresh, refreshBoards])
+  }, [gatewayState, refresh, refreshBoards])
 
   // 实时事件流（替换轮询）：看板有变动时 600ms 防抖刷新；断线自动重连（cursor 续传）
   useEffect(() => {

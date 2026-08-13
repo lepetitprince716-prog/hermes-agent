@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@nanostores/react'
 import { Routes, Route, useNavigate, useParams } from 'react-router'
-import { $gatewayState, $gatewayError, $sessions, $sessionsSorted, $selectedSessionId, $messages } from '@/store/app'
-import { connectGateway, gatewayRequest } from '@/lib/gateway'
-import { defaultDashboardUrl, resolveGatewayWsUrl } from '@/lib/gateway-url'
+import { $gatewayState, $gatewayError, $sessions, $sessionsSorted, $selectedSessionId } from '@/store/app'
+import { connectGateway, ensureLiveness, gatewayRequest } from '@/lib/gateway'
 import ChatPage from '@/pages/ChatPage'
 import FilesPage from '@/pages/FilesPage'
 import KanbanPage from '@/pages/KanbanPage'
@@ -46,9 +45,21 @@ export default function App() {
   useEffect(() => {
     if (bootTried) return
     setBootTried(true)
-    const url = defaultDashboardUrl()
-    connectGateway(url).catch(() => {})
+    connectGateway().catch(() => {})
   }, [bootTried])
+
+  // iOS 僵尸连接：回前台探活。WKWebView 后台可能静默杀 socket 且不发 close。
+  useEffect(() => {
+    const onForeground = () => { void ensureLiveness().catch(() => {}) }
+    document.addEventListener('visibilitychange', onForeground)
+    window.addEventListener('focus', onForeground)
+    window.addEventListener('pageshow', onForeground)
+    return () => {
+      document.removeEventListener('visibilitychange', onForeground)
+      window.removeEventListener('focus', onForeground)
+      window.removeEventListener('pageshow', onForeground)
+    }
+  }, [])
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">

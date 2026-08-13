@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { useStore } from '@nanostores/react'
-import { $sessions, $sessionsSorted, sessionTitle, type SessionInfo } from '@/store/app'
+import { $gatewayState, $sessions, $sessionsSorted, sessionTitle, type SessionInfo } from '@/store/app'
 import { gatewayRequest } from '@/lib/gateway'
 import { formatRelativeTime } from '@/lib/utils'
 
@@ -17,6 +17,7 @@ function extractSessions(res: unknown): SessionInfo[] {
 export default function SessionsPage() {
   const navigate = useNavigate()
   const sessions = useStore($sessionsSorted)
+  const gatewayState = useStore($gatewayState)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -31,7 +32,9 @@ export default function SessionsPage() {
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    if (gatewayState === 'open') void refresh()
+  }, [gatewayState, refresh])
 
   const onNew = useCallback(async () => {
     // 新会话：直接跳到根的 Chat，首条消息会自动创建 session
