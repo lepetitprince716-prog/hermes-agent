@@ -23,16 +23,18 @@ export default defineConfig({
     // hermes-mobile.zzzoficial.com = Cloudflare Tunnel 公网入口（Access 门禁保护）
     allowedHosts: ['.ts.net', '.zzzoficial.com'],
     proxy: {
-      // 同源代理到 loopback dashboard：真机无需 CORS、不触发 OAuth gate
-      // （dashboard 保持 127.0.0.1 绑定，代理请求带 changeOrigin 的 Host 重写）
       '/_dash': {
         target: 'http://127.0.0.1:9119',
         changeOrigin: true,
         ws: true,
         rewrite: p => p.replace(/^\/_dash/, ''),
-        // 浏览器 WS 握手带页面 Origin（LAN IP），dashboard 只收 loopback origin → 403。
-        // vite 原生选项：把 WS 握手的 Origin 重写为 target（loopback）。
-        // 注：http-proxy 的 headers 选项会让请求挂起，踩过，勿回退。
+        rewriteWsOrigin: true,
+      },
+      '/_z3': {
+        target: 'http://127.0.0.1:19119',
+        changeOrigin: true,
+        ws: true,
+        rewrite: p => p.replace(/^\/_z3/, ''),
         rewriteWsOrigin: true,
       },
     },

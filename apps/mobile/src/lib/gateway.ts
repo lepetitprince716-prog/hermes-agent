@@ -148,12 +148,16 @@ async function doConnect(wsUrlOrDashboard: string): Promise<void> {
 }
 
 /** 单飞 connect：并发调用共享同一个 promise，避免双连撞车。不传参则自动探测（vite/隧道走 /_dash）。 */
-export async function connectGateway(wsUrlOrDashboard?: string): Promise<void> {
+export async function connectGateway(wsUrlOrDashboard?: string, opts?: { force?: boolean }): Promise<void> {
   const input = wsUrlOrDashboard?.trim() || ''
   if (input) lastDashboardInput = input
-  if (client?.connectionState === 'open') return
-  if (connectPromise) return connectPromise
-  connectPromise = doConnect(input).finally(() => {
+  if (!opts?.force && client?.connectionState === 'open') return
+  if (connectPromise) {
+    if (!opts?.force) return connectPromise
+    await connectPromise.catch(() => {})
+  }
+  if (opts?.force && client?.connectionState === 'open') disconnectGateway()
+  connectPromise = doConnect(input || lastDashboardInput || '').finally(() => {
     connectPromise = null
   })
   return connectPromise

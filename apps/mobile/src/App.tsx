@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@nanostores/react'
 import { NavLink, Routes, Route, useNavigate, useParams } from 'react-router'
-import { $gatewayState, $gatewayError, $sessions, $sessionsSorted, $selectedSessionId } from '@/store/app'
+import { $gatewayState, $sessions, $sessionsSorted, $selectedSessionId, $currentInstanceId } from '@/store/app'
 import { connectGateway, ensureLiveness, gatewayRequest } from '@/lib/gateway'
+import { findInstance, loadSavedInstance } from '@/lib/instances'
 import ChatPage from '@/pages/ChatPage'
 import FilesPage from '@/pages/FilesPage'
 import KanbanPage from '@/pages/KanbanPage'
@@ -26,15 +27,20 @@ function TopBar({ title, right }: { title: string; right?: React.ReactNode }) {
   )
 }
 
-function OfflineBadge() {
+function InstanceChip() {
   const state = useStore($gatewayState)
-  const err = useStore($gatewayError)
-  if (state === 'open') return null
-  const label = state === 'connecting' ? '连接中' : state === 'error' ? '未连接' : '未连接'
+  const instanceId = useStore($currentInstanceId)
+  const inst = findInstance(instanceId)
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2 py-1 text-xs text-red-600" title={err ?? undefined}>
-      <span className="size-1.5 rounded-full bg-red-500" />
-      {label}
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs',
+        state === 'open' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-muted text-muted-foreground',
+      )}
+      title={inst.hint}
+    >
+      <span className={cn('size-1.5 rounded-full', state === 'open' ? 'bg-emerald-500' : 'bg-muted-foreground')} />
+      {inst.label}
     </span>
   )
 }
@@ -97,6 +103,7 @@ export default function App() {
   useEffect(() => {
     if (bootTried) return
     setBootTried(true)
+    $currentInstanceId.set(loadSavedInstance().id)
     connectGateway().catch(() => {})
   }, [bootTried])
 
@@ -120,13 +127,13 @@ export default function App() {
           <Routes>
             <Route path="/" element={<ChatRoute />} />
             <Route path="/s/:id" element={<ChatRoute />} />
-            <Route path="/projects" element={<><TopBar title="项目" right={<OfflineBadge />} /><ProjectsPage /></>} />
-            <Route path="/projects/:projectId" element={<><TopBar title="文件" right={<OfflineBadge />} /><FilesPage /></>} />
-            <Route path="/kanban" element={<><TopBar title="看板" right={<OfflineBadge />} /><KanbanPage /></>} />
-            <Route path="/stats" element={<><TopBar title="统计" right={<OfflineBadge />} /><StatsPage /></>} />
-            <Route path="/sessions" element={<><TopBar title="历史" right={<OfflineBadge />} /><SessionsPage /></>} />
-            <Route path="/settings" element={<><TopBar title="设置" right={<OfflineBadge />} /><SettingsPage /></>} />
-            <Route path="*" element={<><TopBar title="Hermes" right={<OfflineBadge />} /><ChatRoute /></>} />
+            <Route path="/projects" element={<><TopBar title="项目" right={<InstanceChip />} /><ProjectsPage /></>} />
+            <Route path="/projects/:projectId" element={<><TopBar title="文件" right={<InstanceChip />} /><FilesPage /></>} />
+            <Route path="/kanban" element={<><TopBar title="看板" right={<InstanceChip />} /><KanbanPage /></>} />
+            <Route path="/stats" element={<><TopBar title="统计" right={<InstanceChip />} /><StatsPage /></>} />
+            <Route path="/sessions" element={<><TopBar title="历史" right={<InstanceChip />} /><SessionsPage /></>} />
+            <Route path="/settings" element={<><TopBar title="设置" right={<InstanceChip />} /><SettingsPage /></>} />
+            <Route path="*" element={<><TopBar title="Hermes" right={<InstanceChip />} /><ChatRoute /></>} />
           </Routes>
         </div>
         <BottomNav />
@@ -171,7 +178,7 @@ function ChatRoute() {
             会话 {sessions.length ? `· ${sessions.length}` : ''}
           </button>
           <span className="hidden md:block" />
-          <OfflineBadge />
+          <InstanceChip />
           <button
             onClick={() => navigate('/settings')}
             aria-label="设置"
