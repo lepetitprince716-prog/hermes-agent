@@ -1,0 +1,121 @@
+name: upstream-pr-watch
+
+# Watches two upstream PRs (NousResearch/hermes-agent #87198 / #87199) for new
+# review activity and lets Claude Code address it on the matching fork branch.
+# State (last-processed comment ids) lives in .github/pr-watch-state.json,
+# committed back to this branch each run.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for new upstream review activity
+        id: scan
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          STATE=.github/pr-watch-state.json
+          [ -f "$STATE" ] || echo '{}' > "$STATE"
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+
+          PRS = {"87198": "per-model-compression-cap", "87199": "skills-index-compact-categories"}
+          state = json.load(open(".github/pr-watch-state.json"))
+          report = {}
+          for pr, branch in PRS.items():
+              new_items = []
+              for endpoint, kind in [
+                  (f"repos/NousResearch/hermes-agent/issues/{pr}/comments", "issue"),
+                  (f"repos/NousResearch/hermes-agent/pulls/{pr}/comments", "review"),
+                  (f"repos/NousResearch/hermes-agent/pulls/{pr}/reviews", "pr_review"),
+              ]:
+                  out = subprocess.run(
+                      ["gh", "api", endpoint, "--paginate"],
+                      capture_output=True, text=True, check=True,
+                  )
+                  items = json.loads(out.stdout)
+                  seen = state.get(pr, {}).get(kind, 0)
+                  fresh = [c for c in items if c["id"] > seen]
+                  if items:
+                      state.setdefault(pr, {})[kind] = max(c["id"] for c in items)
+                  for c in fresh:
+                      new_items.append({
+                          "kind": kind, "id": c["id"],
+                          "user": (c.get("user") or {}).get("login"),
+                          "path": c.get("path"), "line": c.get("line"),
+                          "body": c.get("body", "")[:4000],
+                          "url": c.get("html_url"),
+                      })
+              if new_items:
+                  report[pr] = {"branch": branch, "new": new_items}
+          json.dump(state, open(".github/pr-watch-state.json", "w"), indent=1)
+          json.dump(report, open("/tmp/pr-watch-report.json", "w"), indent=1)
+          print(f"prs_with_news={len(report)}")
+          if report:
+              print(json.dumps({k: len(v["new"]) for k, v in report.items()}))
+          PY
+          if [ -s /tmp/pr-watch-report.json ] && [ "$(python3 -c 'import json;print(len(json.load(open("/tmp/pr-watch-report.json"))))')" -gt 0 ]; then
+            echo "has_work=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_work=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Persist watcher state
+        run: |
+          git config user.name "pr-watch-bot"
+          git config user.email "noreply@users.noreply.github.com"
+          git add .github/pr-watch-state.json
+          git diff --cached --quiet || git commit -m "chore(pr-watch): state checkpoint [skip ci]"
+          git push
+
+      - name: Claude addresses new review feedback
+        if: steps.scan.outputs.has_work == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GH_PAT }}
+          prompt: |
+            You are maintaining two upstream PRs to NousResearch/hermes-agent,
+            developed on branches of THIS fork (lepetitprince716-prog/hermes-agent).
+            New review activity (JSON): /tmp/pr-watch-report.json
+            Maps PR number -> {"branch": <fork branch>, "new": [comments/reviews]}.
+
+            For each PR with news:
+            1. git fetch origin <branch> && git checkout <branch> (detached work is
+               fine; commit on the branch and push origin <branch>).
+            2. Read every new comment. Treat maintainer/bot review feedback as
+               actionable unless it is clearly rhetorical. NEVER argue; respond
+               with facts.
+            3. Make the requested code changes. Keep commits focused; author as
+               the fork owner noreply identity already configured.
+            4. MANDATORY before pushing: run the relevant tests:
+               uv run --no-sync python -m pytest tests/agent/test_context_compressor.py tests/agent/test_prompt_builder.py tests/agent/test_system_prompt.py -q
+               Never claim tests pass without running them; paste the real summary line.
+            5. Push, then reply on the upstream PR with `gh api` (POST
+               repos/NousResearch/hermes-agent/pulls/<pr>/comments for line
+               comments in reply, or issues/<pr>/comments for a summary):
+               one concise comment per PR listing what changed and the test
+               evidence. English. No local paths, no machine/user details, no
+               secrets. Sign as "(automated follow-up)".
+            6. If a comment is a question, answer it in the reply instead of
+               changing code. If CI failed on the PR, investigate and fix first.
+
+            Hard rules: only touch the two PR branches; never force-push;
+            never edit files unrelated to the review feedback.
