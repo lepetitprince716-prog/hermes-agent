@@ -2052,6 +2052,43 @@ class TestThresholdTokensCap:
         assert comp.should_compress(200_000) is True    # at cap (below 500K pct)
         assert comp.should_compress(250_000) is True    # above cap
 
+    def test_per_model_cap_applies_below_small_ctx_floor(self):
+        """compression.threshold_tokens_by_model caps the matching model even
+        below the sub-512K 75% floor (grok-4.6 500K: floor would be 375K)."""
+        caps = {"grok": 180_000}
+        with patch("agent.context_compressor.get_model_context_length", return_value=500_000), \
+             patch("agent.context_compressor._per_model_threshold_tokens_caps", return_value=caps):
+            comp = ContextCompressor("grok-4.6", threshold_percent=0.50, quiet_mode=True)
+            # threshold_tokens is a lazy property — read it inside the patch.
+            assert comp.threshold_tokens == 180_000
+
+    def test_per_model_cap_leaves_other_models_alone(self):
+        """Non-matching models keep the ratio/floor-derived threshold."""
+        caps = {"grok": 180_000}
+        with patch("agent.context_compressor.get_model_context_length", return_value=983_616), \
+             patch("agent.context_compressor._per_model_threshold_tokens_caps", return_value=caps):
+            comp = ContextCompressor("qwen3.8-max", threshold_percent=0.50, quiet_mode=True)
+            assert comp.threshold_tokens == 983_616 // 2
+
+    def test_per_model_cap_longest_match_wins(self):
+        caps = {"grok": 180_000, "grok-4.6-fast": 150_000}
+        with patch("agent.context_compressor.get_model_context_length", return_value=500_000), \
+             patch("agent.context_compressor._per_model_threshold_tokens_caps", return_value=caps):
+            comp = ContextCompressor("grok-4.6-fast", threshold_percent=0.50, quiet_mode=True)
+            assert comp.threshold_tokens == 150_000
+
+    def test_per_model_cap_survives_model_switch(self):
+        """update_model() re-applies the per-model cap for the new model."""
+        caps = {"grok": 180_000}
+        with patch("agent.context_compressor.get_model_context_length", return_value=500_000), \
+             patch("agent.context_compressor._per_model_threshold_tokens_caps", return_value=caps):
+            comp = ContextCompressor("model-a", threshold_percent=0.50, quiet_mode=True)
+            assert comp.threshold_tokens == 375_000  # 0.75 floor × 500K, no match
+            comp.update_model(model="grok-4.6", context_length=500_000)
+            assert comp.threshold_tokens == 180_000
+            comp.update_model(model="model-a", context_length=500_000)
+            assert comp.threshold_tokens == 375_000  # falls back cleanly
+
     def test_default_config_disabled_and_no_behavior_change(self):
         """DEFAULT_CONFIG ships threshold_tokens=None (disabled) and both
         None and 0 leave the ratio-based trigger byte-identical."""

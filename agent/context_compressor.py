@@ -1549,6 +1549,39 @@ def _summarize_tool_result_unguarded(tool_name: str, tool_args: str, tool_conten
     return f"[{tool_name}]{first_arg} ({content_len:,} chars result)"
 
 
+def _per_model_threshold_tokens_caps() -> dict:
+    """Read ``compression.threshold_tokens_by_model`` from config.yaml.
+
+    Returns a dict mapping model-name substrings to absolute token caps.
+    Longest matching key wins at apply time (same semantics as
+    :func:`resolve_model_threshold`). Malformed entries are dropped so a
+    bad config value can never silently cap a threshold at zero.
+
+    Use case: per-route price-band avoidance. grok-4.6 doubles *all* token
+    rates once the prompt crosses 200K, so capping grok at e.g. 180000
+    keeps every request in the cheap band without shrinking the usable
+    window of long-context models like qwen3.8-max (960K).
+    """
+    try:
+        from hermes_cli.config import load_config_readonly
+
+        cfg = (load_config_readonly() or {}).get("compression") or {}
+        raw = cfg.get("threshold_tokens_by_model") or {}
+        if not isinstance(raw, dict):
+            return {}
+        out = {}
+        for key, val in raw.items():
+            try:
+                ival = int(val)
+            except (TypeError, ValueError):
+                continue
+            if ival > 0:
+                out[str(key)] = ival
+        return out
+    except Exception:
+        return {}
+
+
 def resolve_model_threshold(
     model: str,
     model_thresholds: dict[str, float] | None,
@@ -2447,11 +2480,32 @@ class ContextCompressor(ContextEngine):
         than the user's preferred absolute token count. The cap itself
         is clamped to the current context length so a cap larger than
         the model's window is a no-op (the ratio-based threshold wins).
+
+        Then apply any per-model cap from
+        ``compression.threshold_tokens_by_model`` (substring keys,
+        longest match wins). Unlike ``model_thresholds`` fractions — which
+        the sub-512K floor (75%) raises back up — an absolute per-model
+        cap survives the floor, so a route can be kept under a provider
+        price band (e.g. grok's 200K long-context 2x tier) without
+        touching other models' windows.
         """
         if self.threshold_tokens_cap is not None and self.threshold_tokens_cap > 0:
             _effective_cap = min(self.threshold_tokens_cap, self.context_length)
             if _effective_cap < self.threshold_tokens:
                 self.threshold_tokens = _effective_cap
+        _by_model = _per_model_threshold_tokens_caps()
+        if _by_model and self.model:
+            _best_key = ""
+            _model_cap = None
+            for _key, _val in _by_model.items():
+                if _key in self.model and len(_key) > len(_best_key):
+                    _best_key, _model_cap = _key, _val
+            if _model_cap is not None:
+                _effective_cap = _model_cap
+                if self.context_length:
+                    _effective_cap = min(_effective_cap, self.context_length)
+                if _effective_cap < self.threshold_tokens:
+                    self.threshold_tokens = _effective_cap
 
     @staticmethod
     def _effective_threshold_percent(
