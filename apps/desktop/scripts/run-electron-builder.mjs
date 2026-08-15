@@ -36,6 +36,29 @@ function electronBuilderCli() {
   return path.join(path.dirname(pkgJson), rel)
 }
 
+function localMacSigningArgs() {
+  if (process.platform !== "darwin") return []
+
+  const identity = process.env.CSC_NAME || "DeepSeek Usage Local Code Signing"
+  const probe = spawnSync("security", ["find-identity", "-v", "-p", "codesigning"], {
+    encoding: "utf8",
+  })
+  if (probe.status !== 0 || !(probe.stdout || "").includes(identity)) {
+    console.warn(
+      `[run-electron-builder] local signing identity not in keychain (${identity}); ` +
+        "leaving electron-builder defaults (ad-hoc / unsigned rebuilds invalidate Screen Recording TCC)."
+    )
+    return []
+  }
+
+  // Self-signed certs cannot talk to Apple's timestamp server. osx-sign still
+  // passes bare `--timestamp` unless we force `none`, and that failure used to
+  // drop this machine back to ad-hoc. Ad-hoc designated requirements change
+  // every pack, so macOS treats each rebuild as a new app and re-prompts TCC.
+  console.log(`[run-electron-builder] signing with stable identity: ${identity} (timestamp=none)`)
+  return [`-c.mac.identity=${identity}`, `-c.mac.timestamp=none`]
+}
+
 const dist = electronDistDir()
 const args = []
 if (dist && fs.existsSync(distBinary(dist))) {
@@ -46,6 +69,7 @@ if (dist && fs.existsSync(distBinary(dist))) {
       "via @electron/get (electronVersion + ELECTRON_MIRROR)."
   )
 }
+args.push(...localMacSigningArgs())
 args.push(...process.argv.slice(2))
 
 const result = spawnSync(process.execPath, [electronBuilderCli(), ...args], {

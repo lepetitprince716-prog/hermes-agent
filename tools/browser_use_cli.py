@@ -119,6 +119,10 @@ def _base_subprocess_env() -> dict:
     env.pop("PYTHONPATH", None)
     env.pop("PYTHONHOME", None)
     env.setdefault("ANONYMIZED_TELEMETRY", "false")
+    # browser-use CLI runs under its own uv-managed Python (3.13); a leaked
+    # PYTHONPATH pointing at the Hermes 3.11 venv site-packages makes its
+    # pydantic_core import fail with ModuleNotFoundError. (2026-08-13)
+    env.pop("PYTHONPATH", None)
     return env
 
 
