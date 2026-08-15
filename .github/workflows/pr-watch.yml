@@ -5,9 +5,9 @@ name: upstream-pr-watch
 #
 # Trust model: the upstream repo is public, so anyone can comment on these PRs.
 # Only feedback from upstream maintainers (author_association OWNER / MEMBER /
-# COLLABORATOR) or bots is allowed to drive code changes and replies. Comments
-# from anyone else never reach the agent; they are appended to
-# .github/pr-watch-untrusted.jsonl for a human to read.
+# COLLABORATOR), bots, or the fork owner themselves is allowed to drive code
+# changes and replies. Comments from anyone else never reach the agent; they are
+# appended to .github/pr-watch-untrusted.jsonl for a human to read.
 #
 # State (last-processed comment ids) lives in .github/pr-watch-state.json and is
 # committed back to the default branch only after the agent step succeeds, so a
@@ -39,19 +39,27 @@ jobs:
         id: scan
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+          FORK_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           STATE=.github/pr-watch-state.json
           [ -f "$STATE" ] || echo '{}' > "$STATE"
           python3 - <<'PY'
-          import json, subprocess
+          import json, os, subprocess
 
           PRS = {"87198": "per-model-compression-cap", "87199": "skills-index-compact-categories"}
           # Only these may steer the agent. On a public repo everyone else is a stranger.
           TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+          # The fork owner steers their own PRs. Upstream they are only a
+          # CONTRIBUTOR (or NONE), so the association check alone would
+          # quarantine their own review replies.
+          TRUSTED_LOGINS = {login for login in [os.environ.get("FORK_OWNER", "")] if login}
 
           def is_trusted(c):
-              if (c.get("user") or {}).get("type") == "Bot":
+              user = c.get("user") or {}
+              if user.get("type") == "Bot":
+                  return True
+              if user.get("login") in TRUSTED_LOGINS:
                   return True
               return c.get("author_association") in TRUSTED_ASSOCIATIONS
 
