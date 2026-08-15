@@ -1,7 +1,12 @@
 name: upstream-pr-watch
 
-# Watches two upstream PRs (NousResearch/hermes-agent #87198 / #87199) for new
-# review activity and lets Claude Code address it on the matching fork branch.
+# Watches the open upstream PRs (NousResearch/hermes-agent #80461, #87198,
+# #87199, #87202, #87204) for new review activity and lets Claude Code address
+# it on the matching fork branch.
+#
+# When adding a PR to PRS, run this workflow once via workflow_dispatch with
+# prime=true. That records the PR's existing comments as already-seen; without
+# it the first run treats the entire backlog as new and replays it at the agent.
 #
 # Trust model: the upstream repo is public, so anyone can comment on these PRs.
 # Only feedback from upstream maintainers (author_association OWNER / MEMBER /
@@ -17,6 +22,15 @@ on:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
+    inputs:
+      prime:
+        description: >-
+          Record the current comment ids as already-seen and skip the agent.
+          Run this once after adding a PR to the watch list, so the agent
+          reacts only to activity from that point on instead of replaying
+          the PR's entire comment history.
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -40,6 +54,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
           FORK_OWNER: ${{ github.repository_owner }}
+          PRIME: ${{ inputs.prime }}
         run: |
           set -euo pipefail
           STATE=.github/pr-watch-state.json
@@ -47,7 +62,16 @@ jobs:
           python3 - <<'PY'
           import json, os, subprocess
 
-          PRS = {"87198": "per-model-compression-cap", "87199": "skills-index-compact-categories"}
+          PRS = {
+              "80461": "feat/desktop-sdk-focused-session-state",
+              "87198": "per-model-compression-cap",
+              "87199": "skills-index-compact-categories",
+              "87202": "desktop-mac-tcc-screen-recording",
+              "87204": "desktop-nsscreencapture-plist",
+          }
+          # Priming records what exists right now as already-seen, so newly
+          # watched PRs do not replay their whole comment history at the agent.
+          PRIME = os.environ.get("PRIME", "").lower() == "true"
           # Only these may steer the agent. On a public repo everyone else is a stranger.
           TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
           # The fork owner steers their own PRs. Upstream they are only a
@@ -91,6 +115,8 @@ jobs:
                           "body": c.get("body", "")[:4000],
                           "url": c.get("html_url"),
                       }
+                      if PRIME:
+                          continue
                       (actionable if is_trusted(c) else untrusted).append(entry)
               if actionable:
                   report[pr] = {"branch": branch, "new": actionable}
@@ -101,7 +127,7 @@ jobs:
           with open("/tmp/pr-watch-untrusted.jsonl", "w") as fh:
               for entry in untrusted:
                   fh.write(json.dumps(entry) + "\n")
-          print(f"actionable_prs={len(report)} untrusted_comments={len(untrusted)}")
+          print(f"prime={PRIME} actionable_prs={len(report)} untrusted_comments={len(untrusted)}")
           if report:
               print(json.dumps({k: len(v["new"]) for k, v in report.items()}))
           PY
