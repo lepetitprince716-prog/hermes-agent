@@ -315,6 +315,30 @@ class TestBuildSkillsSystemPrompt:
         full = build_skills_system_prompt()
         assert "Write threads" in full
 
+    def test_compact_star_demotes_all_except_bang_keep_list(
+        self, monkeypatch, tmp_path
+    ):
+        """"*" demotes every category to names-only; "!"-prefixed entries stay full."""
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        for cat, name, desc in [
+            ("hermes", "hermes-core-customization", "Patch Hermes core safely"),
+            ("pixiv", "pixiv", "Search pixiv artworks"),
+        ]:
+            d = tmp_path / "skills" / cat / name
+            d.mkdir(parents=True)
+            (d / "SKILL.md").write_text(
+                f"---\nname: {name}\ndescription: {desc}\n---\n"
+            )
+        out = build_skills_system_prompt(
+            compact_categories=frozenset({"*", "!hermes"})
+        )
+        # kept category: description survives
+        assert "Patch Hermes core safely" in out
+        # demoted category: name visible, description dropped
+        assert "pixiv" in out
+        assert "Search pixiv artworks" not in out
+        assert "[names only]" in out
+
 
 
     def test_excludes_disabled_skills(self, monkeypatch, tmp_path):

@@ -1982,17 +1982,31 @@ def _build_skills_system_prompt_inner(
     # what the index stops showing them. Match on the top-level category
     # segment so nested categories ("social-media/twitter") are demoted with
     # their parent.
+    #
+    # ``compact_categories`` also accepts "*" (demote every category) with
+    # "!"-prefixed exceptions ("!hermes" keeps hermes full) — the operator
+    # pins this via skills.compact_categories / skills.keep_full_categories
+    # in config.yaml to slim the per-call index on skill-heavy installs.
+    _cc = compact_categories or frozenset()
+    _keep_full = {c[1:] for c in _cc if isinstance(c, str) and c.startswith("!")}
+    _demote_all = "*" in _cc
+    _named = {
+        c for c in _cc
+        if isinstance(c, str) and c and not c.startswith("!") and c != "*"
+    }
     demoted = frozenset(
         cat for cat in skills_by_category
-        if cat.split("/", 1)[0] in (compact_categories or frozenset())
+        if cat.split("/", 1)[0] in _named
+        or (_demote_all and cat.split("/", 1)[0] not in _keep_full)
     )
 
     hidden_note = ""
     if demoted:
         hidden_note = (
-            "\n(Categories marked [names only] are outside the current coding "
-            "context, so their descriptions are omitted — the skills work "
-            "normally and load with skill_view(name) as usual.)"
+            "\n(Categories marked [names only] have their descriptions omitted "
+            "to keep this index compact — the skills work normally and load "
+            "with skill_view(name) as usual; skills_list lists full "
+            "descriptions on demand.)"
         )
 
     if not skills_by_category:

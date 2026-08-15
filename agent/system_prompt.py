@@ -507,6 +507,30 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
             )
         except Exception:
             _compact_cats = frozenset()
+        # Operator-pinned demotions: skills.compact_categories in config.yaml
+        # lists category top-level segments always rendered names-only,
+        # regardless of posture. Skill installs with hundreds of entries pay
+        # the index description block on every request of every session; the
+        # pinned categories keep names visible (skill_view still loads them)
+        # while dropping per-call description bulk. Missing/empty = unchanged.
+        # "*" demotes all categories; skills.keep_full_categories lists the
+        # exceptions (encoded internally as "!"-prefixed entries).
+        try:
+            from hermes_cli.config import load_config_readonly as _load_cfg_ro
+
+            _skills_cfg = (_load_cfg_ro() or {}).get("skills") or {}
+            _pinned = _skills_cfg.get("compact_categories") or []
+            _keep = _skills_cfg.get("keep_full_categories") or []
+            _extra = set()
+            if isinstance(_pinned, (list, tuple)):
+                _extra |= {str(c).strip() for c in _pinned if str(c).strip()}
+            if isinstance(_keep, (list, tuple)):
+                _extra |= {
+                    "!" + str(c).strip() for c in _keep if str(c).strip()
+                }
+            _compact_cats = frozenset(set(_compact_cats) | _extra)
+        except Exception:
+            pass
         skills_prompt = _r.build_skills_system_prompt(
             available_tools=agent.valid_tool_names,
             available_toolsets=avail_toolsets,
