@@ -493,7 +493,7 @@ function McpSetupPending({ args }: ToolCallMessagePartProps) {
           primary-tinted action plus a quiet ghost decline, with the matching
           keyboard hints. One consent vocabulary across the transcript. */}
       <div className="flex items-center gap-2.5">
-        <div className="inline-flex h-6 items-stretch overflow-hidden rounded-md border border-primary/25 bg-primary/10 text-primary">
+        <div className="inline-flex h-6 items-stretch overflow-hidden border border-primary/25 bg-primary/10 text-primary">
           <Button
             className="h-full gap-1 rounded-none px-2 text-xs font-medium text-primary hover:bg-primary/15 hover:text-primary"
             disabled={working}
@@ -508,7 +508,7 @@ function McpSetupPending({ args }: ToolCallMessagePartProps) {
         {/* Never disabled: while a flow is in flight this is the cancel —
             a stuck OAuth tab or hung install must always have a way out. */}
         <Button
-          className="h-6 gap-1.5 rounded-md px-1.5 text-xs font-normal text-(--ui-text-tertiary) hover:text-foreground"
+          className="h-6 gap-1.5 rounded-[2px] px-1.5 text-xs font-normal text-(--ui-text-tertiary) hover:text-foreground"
           onClick={decline}
           size="xs"
           variant="ghost"

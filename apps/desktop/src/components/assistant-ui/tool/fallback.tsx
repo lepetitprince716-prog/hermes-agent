@@ -91,12 +91,18 @@ const TOOL_HEADER_GLYPH_WRAP_CLASS = 'grid size-3.5 shrink-0 place-items-center 
 // than a chrome heading. Used for "stdout", "stderr", "Search results", etc.
 const TOOL_SECTION_LABEL_CLASS = 'mb-1 text-[0.65rem] font-medium uppercase tracking-[0.08em] text-(--ui-text-tertiary)'
 
-// Inset scroll surface for any detail body. The expanded tool row owns the
-// border; the payload itself is just clipped raw text.
-const TOOL_SECTION_SURFACE_CLASS =
-  'max-h-20 max-w-full overflow-auto bg-transparent px-2 py-1.5 text-(--ui-text-secondary)'
+// Blueprint marker variant: a 4px accent square leads the label — the same
+// language as the rails, so a payload section reads as a plotted point, not
+// a boxed card. Only content sections take the marker; disclosure toggles
+// (e.g. "Tool payload") keep the bare label so it doesn't fight the caret.
+const TOOL_SECTION_LABEL_MARKED_CLASS = cn(
+  TOOL_SECTION_LABEL_CLASS,
+  'flex items-center gap-1.5 before:block before:size-1 before:shrink-0 before:bg-(--ui-accent) before:opacity-35'
+)
 
-const TOOL_EXPANDED_SHELL_CLASS = 'rounded-[0.3125rem] border border-(--ui-stroke-tertiary)'
+// Inset scroll surface for any detail body. The rail on the expanded body
+// owns the structure; the payload itself is just clipped raw text.
+const TOOL_SECTION_SURFACE_CLASS = 'max-h-20 max-w-full overflow-auto bg-transparent py-1 pr-2 text-(--ui-text-secondary)'
 
 const TOOL_SECTION_PRE_CLASS = cn(TOOL_SECTION_SURFACE_CLASS, 'font-mono text-[0.7rem] leading-relaxed')
 
@@ -505,7 +511,7 @@ function ToolEntry({ part }: ToolEntryProps) {
       <Button
         aria-label={statusCopy.dismiss}
         className={cn(
-          'size-5 rounded-md text-(--ui-text-tertiary) transition-opacity hover:text-(--ui-text-primary) hover:opacity-100',
+          'size-5 rounded-[2px] text-(--ui-text-tertiary) transition-opacity hover:text-(--ui-text-primary) hover:opacity-100',
           open
             ? 'opacity-80'
             : 'opacity-0 group-hover/disclosure-row:opacity-80 group-focus-within/disclosure-row:opacity-80'
@@ -538,10 +544,7 @@ function ToolEntry({ part }: ToolEntryProps) {
 
   return (
     <div
-      className={cn(
-        'group/tool-block min-w-0 max-w-full overflow-hidden text-[length:var(--conversation-tool-font-size)] text-(--ui-text-tertiary)',
-        open && TOOL_EXPANDED_SHELL_CLASS
-      )}
+      className="group/tool-block min-w-0 max-w-full overflow-hidden text-[length:var(--conversation-tool-font-size)] text-(--ui-text-tertiary)"
       data-conversation-scaffold=""
       data-file-edit={isFileEdit && open ? '' : undefined}
       data-slot="tool-block"
@@ -549,57 +552,57 @@ function ToolEntry({ part }: ToolEntryProps) {
       data-tool-row=""
       ref={enterRef}
     >
-      <div className={cn(open && 'border-b border-(--ui-stroke-tertiary) px-2 py-1.5')}>
-        <DisclosureRow
-          action={dismissAction}
-          onToggle={hasExpandableContent ? () => setToolDisclosureOpen(disclosureId, !open) : undefined}
-          open={open}
-          trailing={trailing}
+      <DisclosureRow
+        action={dismissAction}
+        onToggle={hasExpandableContent ? () => setToolDisclosureOpen(disclosureId, !open) : undefined}
+        open={open}
+        trailing={trailing}
+      >
+        <span
+          className="flex min-w-0 items-center gap-1.5"
+          title={isFileEdit && view.subtitle ? view.subtitle : undefined}
         >
-          <span
-            className="flex min-w-0 items-center gap-1.5"
-            title={isFileEdit && view.subtitle ? view.subtitle : undefined}
-          >
-            <ToolGlyph
-              copy={copy}
-              filePath={isFileEdit ? view.subtitle : undefined}
-              icon={view.icon}
-              legendary={memoryLegendary}
-              status={leadingStatus(isPending, view.status)}
-            />
-            <ToolTitle
-              isPending={isPending}
-              legendary={memoryLegendary}
-              status={view.status}
-              title={view.title}
-              titleAction={view.titleAction}
-            />
-            {!isPending && view.countLabel && (
-              <span className={cn(SCAFFOLD_META_CLASS, memoryMetaClass)}>{view.countLabel}</span>
-            )}
-            {showDiffStats && diffStats && (
-              <span className="flex shrink-0 items-center gap-1 font-mono text-[0.625rem] tabular-nums">
-                {diffStats.added > 0 && (
-                  <span className="text-emerald-600 dark:text-emerald-400">+{diffStats.added}</span>
-                )}
-                {diffStats.removed > 0 && (
-                  <span className="text-rose-600 dark:text-rose-400">−{diffStats.removed}</span>
-                )}
-              </span>
-            )}
-            {!isFileEdit && !isPending && view.durationLabel && (
-              <span className={cn(SCAFFOLD_META_CLASS, memoryMetaClass)}>{view.durationLabel}</span>
-            )}
-          </span>
-        </DisclosureRow>
-      </div>
+          <ToolGlyph
+            copy={copy}
+            filePath={isFileEdit ? view.subtitle : undefined}
+            icon={view.icon}
+            legendary={memoryLegendary}
+            status={leadingStatus(isPending, view.status)}
+          />
+          <ToolTitle
+            isPending={isPending}
+            legendary={memoryLegendary}
+            status={view.status}
+            title={view.title}
+            titleAction={view.titleAction}
+          />
+          {!isPending && view.countLabel && (
+            <span className={cn(SCAFFOLD_META_CLASS, memoryMetaClass)}>· {view.countLabel}</span>
+          )}
+          {showDiffStats && diffStats && (
+            <span className="flex shrink-0 items-center gap-1 font-mono text-[0.625rem] tabular-nums">
+              <span className="text-(--conversation-scaffold-meta)">·</span>
+              {diffStats.added > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{diffStats.added}</span>}
+              {diffStats.removed > 0 && (
+                <span className="text-rose-600 dark:text-rose-400">−{diffStats.removed}</span>
+              )}
+            </span>
+          )}
+          {!isFileEdit && !isPending && view.durationLabel && (
+            <span className={cn(SCAFFOLD_META_CLASS, memoryMetaClass)}>· {view.durationLabel}</span>
+          )}
+        </span>
+      </DisclosureRow>
       {isPending && <PendingToolApproval part={part} />}
       {open && (
-        <div className="relative grid w-full min-w-0 max-w-full gap-1.5 overflow-hidden p-1.5">
+        <div
+          className="conversation-rail relative grid min-w-0 max-w-full gap-1.5 overflow-hidden pt-1 pb-2"
+          data-rail-state={view.status === 'error' ? 'error' : isPending ? 'running' : undefined}
+        >
           {copyAction.text && (
             <CopyButton
               appearance="inline"
-              className="absolute right-4 top-1.5 z-10 h-5 gap-0 rounded-md px-1 opacity-5 transition-opacity group-hover/tool-block:opacity-100 hover:opacity-100 focus-visible:opacity-100"
+              className="absolute right-2 top-1 z-10 h-5 gap-0 rounded-[2px] px-1 opacity-5 transition-opacity group-hover/tool-block:opacity-100 hover:opacity-100 focus-visible:opacity-100"
               iconClassName="size-3"
               label={copyAction.label}
               showLabel={false}
@@ -612,7 +615,7 @@ function ToolEntry({ part }: ToolEntryProps) {
             <TerminalTranscript command={view.terminalCommand} exitCode={view.terminalExitCode} />
           )}
           {view.imageUrl && (
-            <div className="max-w-72 overflow-hidden rounded-[0.25rem] border border-(--ui-stroke-tertiary)">
+            <div className="max-w-72 overflow-hidden border border-(--ui-stroke-tertiary)">
               <ZoomableImage alt={copy.outputAlt} className="h-auto w-full object-cover" src={view.imageUrl} />
             </div>
           )}
@@ -624,13 +627,11 @@ function ToolEntry({ part }: ToolEntryProps) {
                   <span>{view.searchQuery}</span>
                 </p>
               )}
-              {searchResultsLabel && <p className={TOOL_SECTION_LABEL_CLASS}>{searchResultsLabel}</p>}
+              {searchResultsLabel && <p className={TOOL_SECTION_LABEL_MARKED_CLASS}>{searchResultsLabel}</p>}
               <SearchResultsList hits={view.searchHits} />
             </div>
           )}
-          {view.inlineDiff && (
-            <FileDiffPanel className="-mt-1.5" diff={view.inlineDiff} path={isFileEdit ? view.subtitle : undefined} />
-          )}
+          {view.inlineDiff && <FileDiffPanel diff={view.inlineDiff} path={isFileEdit ? view.subtitle : undefined} />}
           {showDetail &&
             toolViewMode !== 'technical' &&
             (view.status === 'error' ? (
@@ -656,10 +657,10 @@ function ToolEntry({ part }: ToolEntryProps) {
               // is intentionally NOT painted destructive — many CLIs log
               // informational output there.
               <div className="max-w-full text-xs leading-relaxed text-(--ui-text-secondary)">
-                {view.detailLabel && <p className={TOOL_SECTION_LABEL_CLASS}>{view.detailLabel}</p>}
+                {view.detailLabel && <p className={TOOL_SECTION_LABEL_MARKED_CLASS}>{view.detailLabel}</p>}
                 {view.stdout && (
                   <div className="space-y-0.5">
-                    {view.stderr && <p className={TOOL_SECTION_LABEL_CLASS}>stdout</p>}
+                    {view.stderr && <p className={TOOL_SECTION_LABEL_MARKED_CLASS}>stdout</p>}
                     <pre className={cn(TOOL_SECTION_PRE_CLASS, 'whitespace-pre-wrap wrap-anywhere')}>
                       {view.rendersAnsi ? (
                         <AnsiText text={clampForDisplay(view.stdout)} />
@@ -671,7 +672,7 @@ function ToolEntry({ part }: ToolEntryProps) {
                 )}
                 {view.stderr && (
                   <div className={cn('space-y-0.5', view.stdout && 'mt-1.5')}>
-                    <p className={TOOL_SECTION_LABEL_CLASS}>stderr</p>
+                    <p className={TOOL_SECTION_LABEL_MARKED_CLASS}>stderr</p>
                     <pre
                       className={cn(
                         TOOL_SECTION_PRE_CLASS,
@@ -689,7 +690,7 @@ function ToolEntry({ part }: ToolEntryProps) {
               </div>
             ) : (
               <div className="max-w-full text-xs leading-relaxed text-(--ui-text-secondary)">
-                {view.detailLabel && <p className={TOOL_SECTION_LABEL_CLASS}>{view.detailLabel}</p>}
+                {view.detailLabel && <p className={TOOL_SECTION_LABEL_MARKED_CLASS}>{view.detailLabel}</p>}
                 {renderDetailAsCode ? (
                   <pre className={cn(TOOL_SECTION_PRE_CLASS, 'whitespace-pre-wrap wrap-anywhere')}>
                     {view.rendersAnsi ? <AnsiText text={clampForDisplay(view.detail)} /> : clampForDisplay(view.detail)}
@@ -720,7 +721,9 @@ function TerminalTranscript({ command, exitCode }: TerminalTranscriptProps) {
   }
 
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-[0.25rem] border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) px-2 py-1.5 font-mono text-[0.7rem] leading-relaxed">
+    // Borderless sharp tint block — the rail on the expanded body already
+    // owns the structure, so a bordered box here would double the chrome.
+    <div className="flex min-w-0 items-center gap-2 bg-(--ui-bg-quinary) px-2.5 py-1.5 font-mono text-[0.7rem] leading-relaxed">
       {command && (
         <code className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere text-(--ui-text-secondary)">
           <span aria-hidden className="select-none text-(--ui-accent-secondary)">
@@ -732,7 +735,7 @@ function TerminalTranscript({ command, exitCode }: TerminalTranscriptProps) {
       {exitCode !== undefined && (
         <span
           className={cn(
-            'shrink-0 rounded bg-(--ui-bg-tertiary) px-1 py-px text-[0.6rem] tabular-nums',
+            'shrink-0 text-[0.625rem] tabular-nums',
             exitCode === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
           )}
         >
@@ -816,6 +819,9 @@ function ToolRunHeader({
         open={open}
         trailing={<TimelineTimestamp completedAt={completedAt} timestamp={startedAt} />}
       >
+        <span className={TOOL_HEADER_GLYPH_WRAP_CLASS}>
+          <Codicon className="text-(--ui-text-tertiary)" name="list-tree" size="0.75rem" />
+        </span>
         <FadeText className={cn(SCAFFOLD_LABEL_CLASS, 'truncate')}>
           {live ? <span className="shimmer">{summary}</span> : summary}
         </FadeText>

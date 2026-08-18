@@ -19,6 +19,7 @@ import { formatElapsed, useElapsedSeconds, useMeasuredDuration } from '@/compone
 import { ActivityTimerText } from '@/components/chat/activity-timer-text'
 import { GeneratedImage } from '@/components/chat/generated-image-result'
 import { SCAFFOLD_LABEL_CLASS, SCAFFOLD_META_CLASS, ScaffoldRow } from '@/components/chat/scaffold-row'
+import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 import { generatedImageFromResult } from '@/lib/generated-images'
 import { separateGluedReasoningBlocks } from '@/lib/reasoning-blocks'
@@ -218,15 +219,19 @@ const ThinkingDisclosure: FC<{
           </span>
         }
       >
+        <span className="grid size-3.5 shrink-0 place-items-center self-center">
+          <Codicon className="text-(--ui-text-tertiary)" name="sparkle" size="0.75rem" />
+        </span>
         <span className={cn(SCAFFOLD_LABEL_CLASS, pending && 'shimmer')}>{thoughtLabel}</span>
       </ScaffoldRow>
       {open && (
         <div
           className={cn(
-            // Body sits flush with the "Thinking" header — no left indent —
-            // and inherits the disclosure-level opacity fade defined in
-            // styles.css (~0.67 at rest, 1 on hover/focus).
-            'mt-0.5 w-full min-w-0 max-w-full overflow-hidden wrap-anywhere pb-1',
+            // Body hangs off the dashed "mind" rail (thinking is a sketch,
+            // actions get the solid line), content landing exactly under the
+            // header label. Inherits the disclosure-level opacity fade
+            // defined in styles.css (~0.67 at rest, 1 on hover/focus).
+            'conversation-rail-mind mt-0.5 min-w-0 max-w-full overflow-hidden wrap-anywhere pt-0.5 pb-1',
             isPreview && 'max-h-40'
           )}
           ref={scrollRef}

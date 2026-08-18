@@ -31,8 +31,17 @@
 /* Continuous decorative animations otherwise keep Chromium's renderer awake
    behind another app. main.tsx owns this attribute only for the primary
    window; wake/pet overlays retain their purpose-built visibility behavior. */
-:root[data-renderer-animations-paused]
-  :is(.shimmer, .quest-glow, .pet-egg, .pet-egg__glow, .pet-egg-shadow, .pet-wobble, .progress-slide, .kanban-arc),
+:root[data-renderer-animations-paused] :is(
+    .shimmer,
+    .quest-glow,
+    .pet-egg,
+    .pet-egg__glow,
+    .pet-egg-shadow,
+    .pet-wobble,
+    .progress-slide,
+    .kanban-arc,
+    .conversation-rail[data-rail-state='running']
+  ),
 :root[data-renderer-animations-paused] .arc-border::before,
 :root[data-renderer-animations-paused]
   [data-slot='aui_assistant-message-content']
@@ -1863,6 +1872,56 @@ body.guest-pointer-lock :is(webview, iframe) {
    after you clicked to collapse it; `:has(:focus-visible)` excludes that. */
 [data-slot='aui_assistant-message-content'] [data-conversation-scaffold]:is(:hover, :has(:focus-visible)) {
   opacity: 1;
+}
+
+/* ── Blueprint rails ────────────────────────────────────────────────────
+   Expanded tool/thinking bodies hang from a single 1px left rail instead
+   of a boxed card: four borders → one, rounded → square. The rail sits at
+   7px so it runs through the centre of the 14px header glyph, and content
+   lands at 20px — exactly where the header title starts.
+
+   States: solid neutral for settled actions, accent + pulse while the tool
+   is live, red on error, and a dashed accent line for thinking — the mind
+   is a sketch, the action is the line. */
+.conversation-rail {
+  margin-left: 0.4375rem;
+  padding-left: 0.8125rem;
+  border-left: 1px solid var(--ui-stroke-secondary);
+}
+
+.conversation-rail[data-rail-state='error'] {
+  border-left-color: color-mix(in srgb, var(--ui-red) 45%, transparent);
+}
+
+.conversation-rail[data-rail-state='running'] {
+  animation: conversation-rail-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes conversation-rail-pulse {
+  0%,
+  100% {
+    border-left-color: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  }
+  50% {
+    border-left-color: color-mix(in srgb, var(--ui-accent) 18%, transparent);
+  }
+}
+
+/* Border-style dashes are per-side and crude; a sized gradient paints a
+   clean 3px-on / 3px-off dash down the exact left edge. On a scroll
+   container the background stays pinned to the visible window, which is
+   what the live thinking preview wants. */
+.conversation-rail-mind {
+  margin-left: 0.4375rem;
+  padding-left: 0.8125rem;
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--ui-accent) 42%, transparent) 3px,
+    transparent 3px
+  );
+  background-size: 1px 6px;
+  background-repeat: repeat-y;
+  background-position: left top;
 }
 
 /* Shiki surfaces in the inline file diff + source preview: strip the theme's

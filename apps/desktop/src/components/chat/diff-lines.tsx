@@ -56,14 +56,15 @@ const PREVIEW_CHUNK_LINES = 200
 const PREVIEW_LINE_PX = 20
 const PREVIEW_OVERSCAN_LINES = 400
 
-// Bleed out of the tool-card body's `p-1.5` so tints/borders run flush to the
-// card edges (rounded corners clip via the card's overflow); compact height
-// with internal scroll like a code block.
+// The diff sits as plain content inside the rail that structures the
+// expanded tool body — no bleed, no shell of its own; each line's 2px kind
+// gutter + tint is the whole chrome. Compact height with internal scroll
+// like a code block.
 // `overscroll-y-auto` so reaching the box's top/bottom hands the wheel back to
 // the page (no scroll-trap); `overscroll-x-contain` keeps a trackpad's sideways
 // overscroll on long code lines from firing browser back/forward navigation.
 const DIFF_BOX_CLASS =
-  '-mx-1.5 -mb-1.5 max-h-[12rem] max-w-none min-w-0 overflow-auto overscroll-x-contain overscroll-y-auto font-mono text-[0.7rem] leading-relaxed text-(--ui-text-secondary)'
+  'max-h-[12rem] max-w-none min-w-0 overflow-auto overscroll-x-contain overscroll-y-auto font-mono text-[0.7rem] leading-relaxed text-(--ui-text-secondary)'
 
 function diffKind(line: string): DiffKind {
   if (line.startsWith('+') && !line.startsWith('+++')) {
