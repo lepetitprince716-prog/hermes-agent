@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils'
 import { ArtifactCard } from './artifact-card'
 import { SessionRefLink } from './directive-text'
 import { detectEmbed, extractAlert, MarkdownAlert, RichCodeBlock, UrlEmbed } from './embeds'
+import { ResizableMarkdownTable, ResizableMarkdownTh } from './markdown-table'
 import { paragraphPlainText, TranscriptDirectiveLeaf, useIsClaimedDirective } from './transcript-directive'
 
 // Math rendering plugin (KaTeX). Configured once at module scope — the
@@ -201,7 +202,7 @@ function MediaAttachment({ path }: { path: string }) {
 
   if (kind === 'audio' && src) {
     return (
-      <span className="my-3 block max-w-md border border-(--ui-stroke-tertiary) bg-muted/35 p-3">
+      <span className="my-3 block max-w-md rounded-xl border border-(--ui-stroke-tertiary) bg-muted/35 p-3">
         <span className="mb-2 block truncate text-xs font-medium text-muted-foreground">{name}</span>
         <audio className="block w-full" controls onError={() => setFailed(true)} preload="metadata" src={src} />
         {failed && <OpenMediaButton kind="audio" path={path} />}
@@ -211,10 +212,10 @@ function MediaAttachment({ path }: { path: string }) {
 
   if (kind === 'video' && src) {
     return (
-      <span className="my-3 block max-w-2xl border border-(--ui-stroke-tertiary) bg-muted/35 p-3">
+      <span className="my-3 block max-w-2xl rounded-xl border border-(--ui-stroke-tertiary) bg-muted/35 p-3">
         <span className="mb-2 block truncate text-xs font-medium text-muted-foreground">{name}</span>
         <video
-          className="block max-h-112 w-full bg-black"
+          className="block max-h-112 w-full rounded-lg bg-black"
           controls
           onError={() => setFailed(true)}
           src={src}
@@ -420,7 +421,7 @@ function MarkdownImageContent({ className, src, alt, ...props }: ComponentProps<
     <ZoomableImage
       alt={alt}
       className={cn(
-        'm-0 block h-auto w-auto max-h-(--image-preview-height) max-w-full object-contain shadow-[0_0.0625rem_0.125rem_color-mix(in_srgb,#000_4%,transparent),0_0.625rem_1.5rem_color-mix(in_srgb,#000_5%,transparent)]',
+        'm-0 block h-auto w-auto max-h-(--image-preview-height) max-w-full rounded-lg object-contain shadow-[0_0.0625rem_0.125rem_color-mix(in_srgb,#000_4%,transparent),0_0.625rem_1.5rem_color-mix(in_srgb,#000_5%,transparent)]',
         className
       )}
       containerClassName="my-2 block w-fit max-w-[min(100%,var(--image-preview-max-width))]"
@@ -461,7 +462,7 @@ const MARKDOWN_CONTAINER_CLASS_NAME = cn(
   'prose-pre:text-foreground',
   'prose-a:break-words prose-p:[overflow-wrap:anywhere]',
   'prose-li:marker:text-muted-foreground/70',
-  'prose-code:rounded-[2px] prose-code:px-[0.1875rem] prose-code:py-px prose-code:font-mono prose-code:text-[0.9em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none',
+  'prose-code:rounded-[0.25rem] prose-code:px-[0.1875rem] prose-code:py-px prose-code:font-mono prose-code:text-[0.9em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none',
   '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>*+*]:mt-(--paragraph-gap)'
 )
 
@@ -473,7 +474,7 @@ function HugeTextFallback({ containerClassName, text }: { containerClassName?: s
   return (
     <div
       className={cn(
-        'aui-md w-full max-w-none overflow-hidden border border-(--ui-stroke-tertiary) font-mono text-[0.7rem] leading-relaxed text-foreground/90',
+        'aui-md w-full max-w-none overflow-hidden rounded-[0.625rem] border border-(--ui-stroke-tertiary) font-mono text-[0.7rem] leading-relaxed text-foreground/90',
         containerClassName
       )}
     >
@@ -602,29 +603,14 @@ function MarkdownTextSurface({
         li: ({ className, ...props }: ComponentProps<'li'>) => (
           <li className={cn('leading-(--dt-line-height)', className)} {...props} />
         ),
-        table: ({ className, ...props }: ComponentProps<'table'>) => (
-          <div className="aui-md-table my-2 max-w-full overflow-x-auto border border-(--ui-stroke-tertiary)">
-            <table
-              className={cn(
-                'm-0 w-full min-w-[18rem] border-collapse text-[0.8125rem] [&_tr]:border-b [&_tr]:border-(--ui-stroke-tertiary) last:[&_tr]:border-0',
-                className
-              )}
-              {...props}
-            />
-          </div>
-        ),
+        // Columns are drag-resizable; the widths live outside the transcript
+        // (see markdown-table-widths.ts) so a new turn or a session switch
+        // doesn't undo a resize.
+        table: ResizableMarkdownTable,
         thead: ({ className, ...props }: ComponentProps<'thead'>) => (
           <thead className={cn('m-0 bg-muted/35 text-muted-foreground', className)} {...props} />
         ),
-        th: ({ className, ...props }: ComponentProps<'th'>) => (
-          <th
-            className={cn(
-              'whitespace-nowrap px-2.5 py-1.5 text-left align-middle text-[0.75rem] font-medium text-muted-foreground',
-              className
-            )}
-            {...props}
-          />
-        ),
+        th: ResizableMarkdownTh,
         td: ({ className, ...props }: ComponentProps<'td'>) => (
           <td className={cn('px-2.5 py-1.5 align-top text-[0.8125rem] leading-snug', className)} {...props} />
         ),
