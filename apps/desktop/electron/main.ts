@@ -35,7 +35,7 @@ import { stopBackendChild as stopBackendChildImpl, stopBackendTreesForUpdate } f
 import { dashboardFallbackArgs, sourceDeclaresServe } from './backend-command'
 import { createBackendConnectionState } from './backend-connection-state'
 import { buildDesktopBackendEnv, hermesManagedNodePathEntries, normalizeHermesHomeRoot } from './backend-env'
-import { isReauthRequiredError, waitForHermesReady } from './backend-health'
+import { isReauthRequiredError, makeNousCloudBackendDownError, waitForHermesReady } from './backend-health'
 import { backendCommandMatches, createBackendOwnership, createBackendShutdownCoordinator } from './backend-ownership'
 import {
   canImportHermesCli,
@@ -46,8 +46,10 @@ import {
 } from './backend-probes'
 import { waitForDashboardPortAnnouncement } from './backend-ready'
 import {
+  isHostKeyChangedBootFailure,
   isRetryableRemoteBootFailure,
   shouldLatchBackendStartFailure,
+  shouldLatchHostKeyChangedFailure,
   shouldLatchRemoteReauthFailure
 } from './backend-start-failure'
 import {
@@ -189,6 +191,7 @@ import { createMediaProtocolHandler, MEDIA_PROTOCOL } from './media-protocol'
 import {
   oauthGuardMayHardFail,
   oauthSessionIsLive,
+  resolveGatedDownloadAuth,
   resolveJsonBody,
   resolveOauthRestAuth,
   resolveReadinessProbeAuth
@@ -256,6 +259,7 @@ import {
 import { missingRendererAssets } from './renderer-bundle'
 import { attachRendererConsoleCapture, formatRendererBoundaryReport } from './renderer-log'
 import {
+  buildInstanceWindowUrl,
   buildSessionWindowUrl,
   chatWindowWebPreferences,
   createSessionWindowRegistry,
@@ -272,6 +276,7 @@ import { registerTerminalIpc } from './terminal-ipc'
 import { nativeOverlayWidth as computeNativeOverlayWidth, macTitleBarOverlayHeight } from './titlebar-overlay-width'
 import {
   backgroundMaterialFor,
+  defaultTranslucencyState,
   glassActive,
   glassSupportedOn,
   normalizeState as normalizeTranslucency,
@@ -879,7 +884,12 @@ function readPersistedTranslucency() {
   try {
     return normalizeTranslucency(JSON.parse(fs.readFileSync(TRANSLUCENCY_CONFIG_PATH, 'utf8')), GLASS_SUPPORTED)
   } catch {
-    return normalizeTranslucency(null, GLASS_SUPPORTED)
+    // Nothing persisted yet — a first launch. Glass ships on, so the FIRST
+    // window has to be created with the glass backing already: a window born
+    // opaque cannot reliably be swapped to glass afterwards (see
+    // windowBackingOptions). nativeTheme is the only appearance signal main
+    // has this early; the renderer's first resolved send corrects it.
+    return defaultTranslucencyState(nativeTheme.shouldUseDarkColors ? 'dark' : 'light', GLASS_SUPPORTED, IS_WINDOWS)
   }
 }
 
@@ -1361,11 +1371,13 @@ let nativeThemeListenerInstalled = false
 let bootProgressState = {
   error: null,
   fakeMode: BOOT_FAKE_MODE,
+  isCloudBackendDown: false,
   message: 'Waiting to start Hermes backend',
   phase: 'idle',
   progress: 0,
   retryable: false,
   running: false,
+  statusCode: null,
   timestamp: Date.now()
 }
 
@@ -3280,7 +3292,20 @@ const backendOwnership = createBackendOwnership({
         return null
       }
     },
-    write: writeBackendOwnership
+    write: writeBackendOwnership,
+    // A corrupt ownership file is moved aside instead of being rewritten
+    // away by the reap sweep — its records are the only pointer to any
+    // still-running backends it described (#89298).
+    quarantine: () => {
+      const parked = `${DESKTOP_BACKEND_OWNERSHIP_PATH}.corrupt`
+
+      try {
+        fs.renameSync(DESKTOP_BACKEND_OWNERSHIP_PATH, parked)
+        rememberLog(`Backend ownership file was unreadable; moved to ${parked}`)
+      } catch {
+        // Nothing to move (or no permission) — the sweep already skipped.
+      }
+    }
   }
 })
 
@@ -4884,7 +4909,8 @@ function fetchJson(url, token, options: any = {}) {
 // Token-auth download that streams the response body straight to a
 // user-selected destination (via finalizeGatewayDownload) instead of buffering
 // the whole file in memory. The connect timeout is cleared once headers arrive
-// so a slow save dialog or a large stream doesn't trip it.
+// so a slow save dialog or a large stream doesn't trip it. `options.bearer`
+// switches the header to Authorization (RFC 8252 native flow), matching fetchJson.
 function downloadViaTokenToFile(url, token, ctx, options: any = {}) {
   return new Promise((resolve, reject) => {
     let parsed
@@ -4910,9 +4936,7 @@ function downloadViaTokenToFile(url, token, ctx, options: any = {}) {
       parsed,
       {
         method: 'GET',
-        headers: {
-          'X-Hermes-Session-Token': token
-        }
+        headers: options.bearer ? { Authorization: `Bearer ${options.bearer}` } : { 'X-Hermes-Session-Token': token }
       },
       res => {
         // Headers arrived — the connection phase is done. Drop the idle timeout
@@ -7429,6 +7453,13 @@ function readGatewayErrorText(res): Promise<string> {
   })
 }
 
+async function gatedFileAuth(connection) {
+  const nativeAt =
+    connection.authMode === 'oauth' ? await ensureNativeAccessToken(connection.baseUrl).catch(() => null) : null
+
+  return resolveGatedDownloadAuth(connection.authMode, nativeAt, connection.token)
+}
+
 async function saveGatewayFile(payload: any = {}) {
   const filePath = gatewayFilePath(payload.path)
 
@@ -7451,9 +7482,17 @@ async function saveGatewayFile(payload: any = {}) {
   const url = `${connection.baseUrl}${requestPath}`
 
   try {
-    return await (connection.authMode === 'oauth'
-      ? downloadViaOauthSessionToFile(url, ctx)
-      : downloadViaTokenToFile(url, connection.token, ctx))
+    const auth = await gatedFileAuth(connection)
+
+    if (auth.kind === 'bearer') {
+      return await downloadViaTokenToFile(url, auth.token, ctx, { bearer: auth.token })
+    }
+
+    if (auth.kind === 'cookie') {
+      return await downloadViaOauthSessionToFile(url, ctx)
+    }
+
+    return await downloadViaTokenToFile(url, auth.token, ctx)
   } catch (error) {
     // Desktop and the remote gateway update independently. A gateway predating
     // /api/fs/download 404s here; fall back (ONLY on 404) to the older capped
@@ -7478,10 +7517,16 @@ async function saveGatewayFileViaDataUrl(connection, profile, filePath, ctx: any
   )
 
   const url = `${connection.baseUrl}${requestPath}`
+  const auth = await gatedFileAuth(connection)
+  let json: any
 
-  const json = (
-    connection.authMode === 'oauth' ? await fetchJsonViaOauthSession(url) : await fetchJson(url, connection.token)
-  ) as any
+  if (auth.kind === 'bearer') {
+    json = await fetchJson(url, null, { bearer: auth.token })
+  } else if (auth.kind === 'cookie') {
+    json = await fetchJsonViaOauthSession(url)
+  } else {
+    json = await fetchJson(url, auth.token)
+  }
 
   const dataUrl = json?.dataUrl
 
@@ -8936,6 +8981,19 @@ async function buildRemoteConnection(
     try {
       ticket = await mintGatewayWsTicket(baseUrl, remoteHeaders)
     } catch (error) {
+      // For a Nous-managed Cloud agent, a 502/503/504 from the WS-ticket mint
+      // means the backend server itself is down — the actionable Cloud-down
+      // error. This boundary runs BEFORE the readiness loop, so without this
+      // the ticket wrapper below would swallow the server-fault classification
+      // and the renderer would never see isCloudBackendDown. Preserve the
+      // existing 401/403 reauth and generic transport behavior for everything
+      // else (#85335).
+      const cloudError = makeNousCloudBackendDownError(baseUrl, error)
+
+      if (cloudError !== null) {
+        throw cloudError
+      }
+
       throw gatewayTicketFailure(
         error,
         'Your remote gateway session has expired. Open Settings → Gateway and click "Sign in" again.',
@@ -9897,6 +9955,13 @@ async function ensureBackend(profile) {
   }
 
   entry.connectionPromise = spawnPoolBackend(key, entry).catch(async error => {
+    // Land the failure in desktop.log: without this a spawn that dies before
+    // its child exists (guard rejection, runtime resolution) leaves no trace
+    // beyond renderer-side rejections users never see in a bundle.
+    rememberLog(
+      `Hermes backend for profile "${key}" failed to start: ${error instanceof Error ? error.message : String(error)}`
+    )
+
     if (backendPool.get(key) === entry) {
       backendPool.delete(key)
     }
@@ -9982,6 +10047,12 @@ async function ensureRegistryBackend(connectionId, profile) {
       forceLocal: true,
       poolKey: localRoute.poolKey
     }).catch(async error => {
+      // Same trace rule as the v1 pool path: a forced-local child whose spawn
+      // rejects before the child exists must still land in desktop.log.
+      rememberLog(
+        `Hermes backend for profile "${profileKey}" (forced-local) failed to start: ${error instanceof Error ? error.message : String(error)}`
+      )
+
       if (backendPool.get(localRoute.poolKey) === localEntry) {
         backendPool.delete(localRoute.poolKey)
       }
@@ -10263,12 +10334,18 @@ async function spawnPoolBackend(profile, entry, opts: { forceLocal?: boolean; po
   const webDist = resolveWebDist()
   const readyFile = backend.readyFile ? makeDashboardReadyFile() : null
 
-  rememberLog(`Starting Hermes backend for profile "${profile}" via ${backend.label}`)
-
-  const parentStartMarker = await desktopParentStartMarker()
+  // Guard BEFORE the "Starting" line: a profile that only exists on a remote
+  // backend (remote-primary desktop asked for a forced-local child) rejects
+  // here, and logging "Starting" first left an orphaned line with no READY
+  // and no exit — the exact undiagnosable burst signature in remote-gateway
+  // user bundles (Aug 2026, Dash's report).
   assertLocalProfileCanStart(profile, profileDeletionGate, key =>
     directoryExists(path.join(HERMES_HOME, 'profiles', key))
   )
+
+  rememberLog(`Starting Hermes backend for profile "${profile}" via ${backend.label}`)
+
+  const parentStartMarker = await desktopParentStartMarker()
   const backendNonce = crypto.randomBytes(16).toString('hex')
   const parentIdentityEnv = parentWatchdogEnv(process.pid, parentStartMarker, backendNonce)
 
@@ -10828,6 +10905,19 @@ async function startHermes() {
     }
 
     const message = error instanceof Error ? error.message : String(error)
+    const hostKeyChanged = isHostKeyChangedBootFailure(error)
+
+    // Carry structured Cloud-down metadata through the boot-progress / IPC
+    // boundary when present, so the renderer overlay can key on it rather than
+    // re-classifying the message string. main owns classification; the renderer
+    // only consumes the structured result (#85335).
+    const isCloudBackendDown = Boolean(error && typeof error === 'object' && (error as any).isCloudBackendDown === true)
+
+    const statusCode = Number(
+      error && typeof error === 'object' && Number.isInteger((error as any).statusCode)
+        ? (error as any).statusCode
+        : NaN
+    )
 
     // Only latch LOCAL boot failures. A remote failure (lapsed session / mint
     // timeout / host briefly unreachable across sleep) is transient and has no
@@ -10835,6 +10925,16 @@ async function startHermes() {
     // on "session expired" until a full restart, defeating reconnect, the
     // "Sign out & sign in" reload, and the wake-recovery revalidate path.
     if (shouldLatchBackendStartFailure({ attemptedRemote })) {
+      backendStartFailure = error instanceof Error ? error : new Error(message)
+    }
+
+    // A host-key CHANGE is the terminal exception among remote failures: SSH
+    // fails closed until the user verifies the change and clears the stale
+    // known_hosts entry, so retrying re-drives the identical doomed boot (one
+    // bundle showed 157 consecutive failures over 2.5h). Latch it like a local
+    // failure — reset/repair/apply-config clear the latch after the user fixes
+    // known_hosts.
+    if (shouldLatchHostKeyChangedFailure({ attemptedRemote, isReauth: false, isHostKeyChanged: hostKeyChanged })) {
       backendStartFailure = error instanceof Error ? error : new Error(message)
     }
 
@@ -10847,15 +10947,22 @@ async function startHermes() {
     updateBootProgress(
       {
         error: message,
+        isCloudBackendDown: isCloudBackendDown || undefined,
         message: `Desktop boot failed: ${message}`,
         phase: 'backend.error',
         // Renderer contract for the self-heal loop (#82679): a transient
         // REMOTE failure (dropped SSH/HTTP registered connection, mint
         // timeout) is retryable — the renderer re-attempts the boot with
-        // bounded backoff. Local failures and confirmed reauth rejections
-        // are not: those end in the recovery overlay / sign-in affordance.
-        retryable: isRetryableRemoteBootFailure({ attemptedRemote, isReauth: isReauthRequiredError(error) }),
-        running: false
+        // bounded backoff. Local failures, confirmed reauth rejections, and
+        // host-key changes are not: those end in the recovery overlay /
+        // sign-in affordance.
+        retryable: isRetryableRemoteBootFailure({
+          attemptedRemote,
+          isReauth: isReauthRequiredError(error),
+          isHostKeyChanged: hostKeyChanged
+        }),
+        running: false,
+        statusCode: Number.isInteger(statusCode) ? statusCode : undefined
       },
       { allowDecrease: true }
     )
@@ -11048,8 +11155,10 @@ function createSessionWindow(sessionId, { watch = false } = {}) {
 // Additional full "instance" windows — peers of the primary that render the
 // COMPLETE app (sidebar, routing, its own draft) against the shared backend, so
 // a user can run multiple GUI windows at once (⌘⇧N / the "New Window" palette
-// command). Unlike the compact session windows they carry no `?win` flag. The
-// primary mainWindow stays the notification / deep-link / pet-overlay anchor and
+// command). Unlike the compact session windows they carry no `?win` flag; a
+// separate `peer=1` marker prevents them from replaying app-launch source
+// restoration after joining that shared backend. The primary mainWindow stays
+// the notification / deep-link / pet-overlay anchor and
 // is NOT tracked here. The set holds a strong reference so an open peer isn't
 // garbage-collected, and drops it on close.
 const instanceWindows = new Set<any>()
@@ -11129,7 +11238,14 @@ function createInstanceWindow() {
   })
 
   attachRendererConsoleCapture(win, 'instance', rememberLog)
-  loadWindowUrl(win, DEV_SERVER || pathToFileURL(resolveRendererIndex()).toString(), 'Instance window')
+  loadWindowUrl(
+    win,
+    buildInstanceWindowUrl({
+      devServer: DEV_SERVER,
+      rendererIndexPath: DEV_SERVER ? undefined : resolveRendererIndex()
+    }),
+    'Instance window'
+  )
 
   return win
 }
@@ -12786,6 +12902,31 @@ async function probeSshProfileInventory(connection) {
 }
 
 async function enumerateRegistryAgentSources(registry = readDesktopConnectionsRegistry()) {
+  // One dead source must not wedge the whole roster: ensureRegistryBackend on
+  // an unreachable remote can block up to the 45s readiness timeout, and the
+  // Bot Mode poll runs every 5s — each poll queued behind the dead dial, so
+  // the renderer painted stale rows for the entire outage (and the roster IPC
+  // hung >30s in live repro). Bound each source's enumeration; a timeout is
+  // reported like any other unreachable source and retried on the next poll.
+  const perSourceTimeoutMs = 10_000
+
+  const withEnumerationDeadline = async <T>(work: Promise<T>): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    try {
+      return await Promise.race([
+        work,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('roster enumeration timed out')), perSourceTimeoutMs)
+        })
+      ])
+    } finally {
+      if (timer !== null) {
+        clearTimeout(timer)
+      }
+    }
+  }
+
   return Promise.all(
     registry.connections.map(async connection => {
       let raw: { connection: typeof connection; error?: string; installId?: string; profiles: null | string[] }
@@ -12819,7 +12960,10 @@ async function enumerateRegistryAgentSources(registry = readDesktopConnectionsRe
             }
           }
 
-          const descriptor: any = await ensureRegistryBackend(connection.id, null)
+          const descriptor: any = await withEnumerationDeadline(
+            Promise.resolve(ensureRegistryBackend(connection.id, null))
+          )
+
           const body: any = await getJsonForBackend(descriptor, '/api/profiles', { timeoutMs: 8_000 })
 
           // Cached with a TTL, so the 5s roster poll usually pays zero extra
@@ -12905,42 +13049,59 @@ ipcMain.handle('hermes:gateway:ws-url-for', async (_event, payload) => {
 // app's own update pipeline; remote/ssh POST the backend's own
 // /api/hermes/update endpoint (the dashboard updater), which runs
 // `hermes update` on THAT machine.
-ipcMain.handle('hermes:connections:update-all', async () => {
+ipcMain.handle('hermes:connections:update-all', async (_event, payload) => {
   const registry = readDesktopConnectionsRegistry()
 
+  // Optional renderer-side exclusions: the everything-update flow dispatches
+  // the ACTIVE backend through its own detailed-progress path and chains the
+  // local client apply LAST (it relaunches the app), so it excludes those ids
+  // here to avoid double-dispatch. No payload keeps the Settings button's
+  // original all-rows behavior byte-identical.
+  const excludeIds = new Set<string>(
+    Array.isArray((payload as any)?.excludeIds) ? (payload as any).excludeIds.map((id: unknown) => String(id)) : []
+  )
+
   const results = await Promise.all(
-    registry.connections.map(async connection => {
-      const base = { connectionId: connection.id, label: connection.label, kind: connection.kind }
-      const eligibility = updateEligibility(connection)
+    registry.connections
+      .filter(connection => !excludeIds.has(connection.id))
+      .map(async connection => {
+        const base = { connectionId: connection.id, label: connection.label, kind: connection.kind }
+        const eligibility = updateEligibility(connection)
 
-      if (!eligibility.eligible) {
-        return { ...base, ok: false, skipped: true, reason: eligibility.reason }
-      }
-
-      try {
-        if (connection.kind === 'local') {
-          // The app-managed runtime updates through the same pipeline as the
-          // Settings → Updates button (marker + venv gate + relaunch flow).
-          const result: any = await applyUpdates({})
-
-          return { ...base, ok: result?.ok !== false, detail: result?.message || 'update started' }
+        if (!eligibility.eligible) {
+          return { ...base, ok: false, skipped: true, reason: eligibility.reason }
         }
 
-        const descriptor: any = await ensureRegistryBackend(connection.id, null)
+        try {
+          if (connection.kind === 'local') {
+            // The app-managed runtime updates through the same pipeline as the
+            // Settings → Updates button (marker + venv gate + relaunch flow).
+            const result: any = await applyUpdates({})
 
-        const body: any = await postJsonForBackend(descriptor, '/api/hermes/update', {}, { timeoutMs: 15_000 })
+            return { ...base, ok: result?.ok !== false, detail: result?.message || 'update started' }
+          }
 
-        if (body?.ok === false) {
-          // The backend refused (docker/nix/externally-managed installs) —
-          // surface ITS message, per-row, instead of failing the batch.
-          return { ...base, ok: false, skipped: true, reason: body?.error || 'backend-refused', detail: body?.message }
+          const descriptor: any = await ensureRegistryBackend(connection.id, null)
+
+          const body: any = await postJsonForBackend(descriptor, '/api/hermes/update', {}, { timeoutMs: 15_000 })
+
+          if (body?.ok === false) {
+            // The backend refused (docker/nix/externally-managed installs) —
+            // surface ITS message, per-row, instead of failing the batch.
+            return {
+              ...base,
+              ok: false,
+              skipped: true,
+              reason: body?.error || 'backend-refused',
+              detail: body?.message
+            }
+          }
+
+          return { ...base, ok: true, detail: body?.message || 'update started' }
+        } catch (error: any) {
+          return { ...base, ok: false, error: String(error?.message || error) }
         }
-
-        return { ...base, ok: true, detail: body?.message || 'update started' }
-      } catch (error: any) {
-        return { ...base, ok: false, error: String(error?.message || error) }
-      }
-    })
+      })
   )
 
   return { ok: true, results }
