@@ -22,6 +22,7 @@ import { SCAFFOLD_LABEL_CLASS, SCAFFOLD_META_CLASS, ScaffoldRow } from '@/compon
 import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 import { generatedImageFromResult } from '@/lib/generated-images'
+import { isImageGenerationTool } from '@/lib/chat-runtime'
 import { separateGluedReasoningBlocks } from '@/lib/reasoning-blocks'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
@@ -92,7 +93,7 @@ const ChainToolFallback: FC<TimelineToolCallProps> = props => {
     return <DelegateToolPart {...props} />
   }
 
-  if (props.toolName === 'image_generate') {
+  if (isImageGenerationTool(props.toolName)) {
     return <ImageGenerateTool {...props} />
   }
 

@@ -57,6 +57,23 @@ describe('generatedImageEchoSources', () => {
       ])
     ).toEqual(['/host/cat.png', '/sandbox/cat.png'])
   })
+
+  it('recognises the local studio_generate line, bare and MCP-prefixed', () => {
+    expect(
+      generatedImageEchoSources([
+        {
+          result: { host_image: '/host/plugin.png', success: true },
+          toolName: 'studio_generate',
+          type: 'tool-call'
+        },
+        {
+          result: { host_image: '/host/mcp.png', success: true },
+          toolName: 'mcp__loramake_image__studio_generate',
+          type: 'tool-call'
+        }
+      ])
+    ).toEqual(['/host/plugin.png', '/host/mcp.png'])
+  })
 })
 
 describe('dedupeGeneratedImageEchoesInParts', () => {

@@ -127,7 +127,10 @@ export function coerceThinkingText(value: unknown): string {
 }
 
 export function isImageGenerationTool(name?: string): boolean {
-  return name === 'image_generate'
+  // image_generate is the cloud (xAI) line; studio_generate is the local
+  // ComfyUI line — both bare (plugin tool) and MCP-prefixed
+  // (mcp__<server>__studio_generate) spellings count.
+  return name === 'image_generate' || !!name?.endsWith('studio_generate')
 }
 
 export function contextPath(path: string, cwd: string): string {

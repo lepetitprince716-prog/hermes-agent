@@ -1,3 +1,5 @@
+import { isImageGenerationTool } from './chat-runtime'
+
 type ToolLike = {
   result?: unknown
   toolName?: unknown
@@ -46,7 +48,7 @@ function unique(values: string[]): string[] {
 }
 
 function imageResult(part: ToolLike): Record<string, unknown> | null {
-  if (part.type !== 'tool-call' || part.toolName !== 'image_generate') {
+  if (part.type !== 'tool-call' || !isImageGenerationTool(typeof part.toolName === 'string' ? part.toolName : undefined)) {
     return null
   }
 

@@ -9,6 +9,7 @@ import {
   coalesceToolOnlyAssistants,
   coerceThinkingText,
   createToolMergeCache,
+  isImageGenerationTool,
   messageCreatedAt,
   optimisticAttachmentRef,
   parseCommandDispatch,
@@ -305,5 +306,15 @@ describe('coalesceToolOnlyAssistants toolCallId uniqueness', () => {
       .map(part => (part as { toolCallId: string }).toolCallId)
 
     expect(ids).toEqual(['call-a', 'call-b'])
+  })
+})
+
+describe('isImageGenerationTool', () => {
+  it('matches the cloud image tool and both studio_generate spellings', () => {
+    expect(isImageGenerationTool('image_generate')).toBe(true)
+    expect(isImageGenerationTool('studio_generate')).toBe(true)
+    expect(isImageGenerationTool('mcp__loramake_image__studio_generate')).toBe(true)
+    expect(isImageGenerationTool('terminal')).toBe(false)
+    expect(isImageGenerationTool(undefined)).toBe(false)
   })
 })
