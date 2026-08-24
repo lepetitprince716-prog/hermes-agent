@@ -7165,6 +7165,7 @@ _AUX_TASK_SLOTS: Tuple[str, ...] = (
     "approval",
     "mcp",
     "title_generation",
+    "review",
     "triage_specifier",
     "kanban_decomposer",
     "profile_describer",
@@ -16372,14 +16373,34 @@ def _resolve_chat_argv(
     argv, cwd = _make_tui_argv(PROJECT_ROOT / "ui-tui", tui_dev=False)
     # Hermes TUI child: build via the single spawn-env factory (profile-home
     # contract applied; secrets kept — the spawned agent needs provider creds).
-    # An explicit profile scope below still overrides HERMES_HOME afterwards.
+    # An explicit profile scope still overrides HERMES_HOME before config is
+    # bridged into the child environment.
     from tools.environments.local import build_subprocess_env
     env = build_subprocess_env(scrub_secrets=False, inherit_profile_home=True)
+    if profile_dir is not None:
+        env["HERMES_HOME"] = str(profile_dir)
     try:
-        from hermes_cli.config import apply_terminal_config_to_env
-        apply_terminal_config_to_env(env=env)
+        from hermes_cli.config import (
+            apply_terminal_config_to_env,
+            read_raw_config,
+            terminal_config_owned_env_vars,
+        )
+
+        if profile_dir is not None:
+            # The dashboard process already bridged its own terminal config
+            # into os.environ at startup. Remove only keys explicitly owned by
+            # that launch profile before applying the selected profile. Values
+            # exported by the operator for keys omitted from the launch profile
+            # remain valid fallbacks, matching apply_terminal_config_to_env().
+            raw_launch_terminal = read_raw_config().get("terminal")
+            for env_var in terminal_config_owned_env_vars(raw_launch_terminal):
+                env.pop(env_var, None)
+            with _config_profile_scope(requested):
+                apply_terminal_config_to_env(env=env)
+        else:
+            apply_terminal_config_to_env(env=env)
     except Exception:
-        _log.debug("Failed to apply terminal config bridge for dashboard chat", exc_info=True)
+        _log.warning("Failed to apply terminal config bridge for dashboard chat", exc_info=True)
     _apply_tui_python_env(env)
     env.setdefault("NODE_ENV", "production")
     # Browser-embedded chat should prefer stable wheel-based scrollback over
@@ -16402,9 +16423,6 @@ def _resolve_chat_argv(
     # setdefault so an explicit operator value still wins.
     env.setdefault("COLORTERM", "truecolor")
     env["HERMES_TUI_DASHBOARD"] = "1"
-
-    if profile_dir is not None:
-        env["HERMES_HOME"] = str(profile_dir)
 
     if resume:
         _resume_db = _open_session_db_for_profile(
@@ -19299,6 +19317,20 @@ def start_server(
     # ping at 20/20 to detect it promptly and stay under the tunnel's idle
     # window.
     _is_loopback = host in ("127.0.0.1", "localhost", "::1")
+    # Non-loopback ping cadence is config-driven (dashboard.ws_ping_interval /
+    # dashboard.ws_ping_timeout, #79635); the 20/20 defaults keep the
+    # Cloudflare-Tunnel-friendly behaviour when unset or invalid.
+    try:
+        _dash_cfg = load_config().get("dashboard") or {}
+    except Exception:
+        _dash_cfg = {}
+
+    def _ws_ping_setting(key: str, default: float = 20.0) -> float:
+        try:
+            return float(_dash_cfg.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
     config = uvicorn.Config(
         app, host=host, port=port, log_level="warning",
         # proxy_headers defaults to False so _ws_client_is_allowed sees
@@ -19313,8 +19345,8 @@ def start_server(
         # disables the protocol ping (None) so an event-loop stall can never
         # trigger a false disconnect; a genuinely dead local client is still
         # reaped via the WebSocketDisconnect → disconnect/reap path.
-        ws_ping_interval=None if _is_loopback else 20.0,
-        ws_ping_timeout=None if _is_loopback else 20.0,
+        ws_ping_interval=None if _is_loopback else _ws_ping_setting("ws_ping_interval"),
+        ws_ping_timeout=None if _is_loopback else _ws_ping_setting("ws_ping_timeout"),
         ws_max_size=_DESKTOP_ATTACHMENT_WS_MAX_BYTES,
     )
     server = uvicorn.Server(config)
