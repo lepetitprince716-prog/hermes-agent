@@ -160,6 +160,65 @@ def codex_tree(profile_env):
     return root
 
 
+T3_SCHEMA = """
+CREATE TABLE projection_threads (
+    thread_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT
+);
+CREATE TABLE projection_projects (
+    project_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    workspace_root TEXT NOT NULL
+);
+"""
+
+
+def _t3_thread(tid, project_id, title, created, updated, deleted=None):
+    return (tid, project_id, title, created, updated, deleted)
+
+
+@pytest.fixture()
+def t3_tree(profile_env):
+    """Build a fake ~/.t3/userdata tree (real sqlite tables, minimal columns)."""
+    import sqlite3
+
+    root = profile_env / ".t3" / "userdata"
+    root.mkdir(parents=True)
+    con = sqlite3.connect(root / "state.sqlite")
+    con.executescript(T3_SCHEMA)
+    con.executemany(
+        "INSERT INTO projection_projects VALUES (?, ?, ?)",
+        [
+            ("p1", "loramake", "/home/u/loramake"),
+            ("p2", "scratch", "/home/u/scratch"),
+        ],
+    )
+    con.executemany(
+        "INSERT INTO projection_threads VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            _t3_thread("t1", "p1", "fix flaky tests", "2026-07-01T10:00:00Z",
+                       "2026-07-02T12:00:00Z"),
+            _t3_thread("t2", "p1", "add dark mode", "2026-07-03T09:00:00Z",
+                       "2026-07-03T10:00:00Z"),
+            _t3_thread("t3", "p2", "scratch pad", "2026-07-05T09:00:00Z",
+                       "2026-07-05T11:00:00Z", deleted="2026-07-06T00:00:00Z"),
+        ],
+    )
+    con.commit()
+    con.close()
+    (root / "settings.json").write_text(json.dumps({
+        "providerInstances": {
+            "claudeAgent": {"driver": "claudeAgent", "enabled": True},
+            "codex": {"driver": "codex", "enabled": False},
+        },
+    }), encoding="utf-8")
+    return root
+
+
 def snapshot_tree(root: Path) -> dict:
     """Map of relative-path -> bytes for every file under root."""
     return {
@@ -672,6 +731,74 @@ class TestExistingConfigPreserved:
             agent_import.dump_yaml_file(config_path, {"model": "replacement"})
 
         assert config_path.read_bytes() == before
+
+
+# ---------------------------------------------------------------------------
+# T3 Code real run
+# ---------------------------------------------------------------------------
+
+class TestT3CodeImport:
+    @pytest.fixture()
+    def report(self, t3_tree, hermes_home):
+        return run_import("t3code", t3_tree, hermes_home, execute=True)
+
+    def test_detection_includes_t3code(self, t3_tree):
+        assert "t3code" in detect_agents()
+
+    def test_thread_summary_lands_as_one_memory_entry(
+            self, report, hermes_home):
+        memory = (hermes_home / "memories" / "MEMORY.md").read_text()
+        entries = memory.split(ENTRY_DELIMITER)
+        t3_entries = [e for e in entries if "T3 Code threads" in e]
+        assert len(t3_entries) == 1
+        # Deleted threads are filtered; active projects are counted.
+        assert "scratch" not in t3_entries[0]
+        assert "loramake: 2 thread(s)" in t3_entries[0]
+        assert "fix flaky tests" in t3_entries[0]
+        # Conversation bodies never enter the memory store.
+        assert "projection_thread_messages" not in t3_entries[0]
+
+    def test_summary_is_deterministic_idempotent(self, t3_tree, hermes_home):
+        run_import("t3code", t3_tree, hermes_home, execute=True)
+        first = (hermes_home / "memories" / "MEMORY.md").read_text()
+        report = run_import("t3code", t3_tree, hermes_home, execute=True)
+        assert (hermes_home / "memories" / "MEMORY.md").read_text() == first
+        threads = [i for i in report["items"] if i["kind"] == "threads"]
+        assert threads[0]["status"] == "skipped"
+
+    def test_providers_reported_not_merged(self, report, hermes_home):
+        providers = [i for i in report["items"] if i["kind"] == "t3-providers"]
+        assert len(providers) == 1
+        item = providers[0]
+        assert item["enabled_providers"] == ["claudeAgent"]
+        # Read-only: nothing may leak into config.yaml.
+        config_path = hermes_home / "config.yaml"
+        if config_path.exists():
+            assert "claudeAgent" not in config_path.read_text()
+
+    def test_missing_db_is_skipped_not_fatal(self, profile_env, hermes_home):
+        root = profile_env / ".t3" / "userdata"
+        root.mkdir(parents=True)
+        (root / "settings.json").write_text("{}", encoding="utf-8")
+        report = run_import("t3code", root, hermes_home, execute=True)
+        threads = [i for i in report["items"] if i["kind"] == "threads"]
+        assert threads[0]["status"] == "skipped"
+        assert report["summary"]["error"] == 0
+
+    def test_corrupt_db_reports_error(self, profile_env, hermes_home):
+        root = profile_env / ".t3" / "userdata"
+        root.mkdir(parents=True)
+        (root / "state.sqlite").write_text("this is not a database",
+                                           encoding="utf-8")
+        report = run_import("t3code", root, hermes_home, execute=True)
+        errors = [i for i in report["items"] if i["status"] == "error"]
+        assert any(i["kind"] == "threads" for i in errors)
+
+    def test_t3_dry_run_writes_nothing(self, t3_tree, hermes_home):
+        before = snapshot_tree(hermes_home)
+        report = run_import("t3code", t3_tree, hermes_home, execute=False)
+        assert snapshot_tree(hermes_home) == before
+        assert report["summary"]["imported"] > 0
 
 
 # ---------------------------------------------------------------------------

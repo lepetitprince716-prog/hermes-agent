@@ -1,9 +1,10 @@
-"""hermes import-agent — import Claude Code / Codex CLI setups into Hermes.
+"""hermes import-agent — import Claude Code / Codex / T3 Code setups into Hermes.
 
 Usage:
-    hermes import-agent                       # auto-detect ~/.claude or ~/.codex
+    hermes import-agent                       # auto-detect ~/.claude, ~/.codex or ~/.t3
     hermes import-agent claude-code           # import from ~/.claude
     hermes import-agent codex                 # import from ~/.codex
+    hermes import-agent t3code                # import from ~/.t3/userdata
     hermes import-agent claude-code --dry-run # preview only, no changes
     hermes import-agent codex --source /path/to/.codex
 
@@ -30,6 +31,16 @@ codex (~/.codex):
     memories/*.md                   → memory entries in HERMES_HOME/memories/MEMORY.md
     skills/<name>/SKILL.md          → HERMES_HOME/skills/codex-imports/<name>/
 
+t3code (~/.t3/userdata):
+    state.sqlite threads            → ONE summary memory entry in memories/MEMORY.md
+                                      (thread titles/projects/time range only — never
+                                      the conversation bodies; use
+                                      scripts/t3code_import_sessions.py to import the
+                                      full sessions into Hermes' own session store)
+    settings.json providerInstances → read-only report (T3 providers are CLI-binary
+                                      wrappers with no Hermes config.yaml equivalent)
+    skills/<name>/SKILL.md          → HERMES_HOME/skills/t3code-imports/<name>/
+
 Secrets are NEVER imported: credential files (.credentials.json, auth.json)
 are ignored, and MCP server env vars with secret-looking names (KEY, TOKEN,
 SECRET, PASSWORD, ...) are stripped and reported so the user can re-add them
@@ -42,8 +53,10 @@ import json
 import logging
 import re
 import shutil
+import sqlite3
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -59,16 +72,20 @@ ENTRY_DELIMITER = "\n§\n"
 # default memory limit).
 MEMORY_CHAR_LIMIT = 20_000
 
-SUPPORTED_AGENTS = ("claude-code", "codex")
+SUPPORTED_AGENTS = ("claude-code", "codex", "t3code")
 
 _AGENT_DEFAULT_DIRS = {
     "claude-code": ".claude",
     "codex": ".codex",
+    # T3 Code keeps everything under userdata/ (settings.json + state.sqlite),
+    # so the source root IS the agent's data root.
+    "t3code": ".t3/userdata",
 }
 
 _SKILL_CATEGORY = {
     "claude-code": "claude-code-imports",
     "codex": "codex-imports",
+    "t3code": "t3code-imports",
 }
 
 # Env var names that look like credentials — never copied into config.yaml.
@@ -352,6 +369,79 @@ def claude_rule_to_command_pattern(rule: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# T3 Code helpers
+# ---------------------------------------------------------------------------
+
+# Per-project thread-title cap in the summary memory entry (the entry shares
+# the 20K MEMORY_CHAR_LIMIT budget with every other memory).
+_T3_TITLES_PER_PROJECT = 5
+
+
+def _t3_epoch(iso: str) -> Optional[float]:
+    """Parse a T3 ISO8601 timestamp ('2026-07-22T13:12:46.581Z') to epoch s."""
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _summarize_t3_threads(db_path: Path) -> Dict[str, Any]:
+    """Read state.sqlite read-only and summarize its active threads.
+
+    Returns {"thread_count", "time_range", "projects": [(project, [titles])]}.
+    Opens with mode=ro so a running T3 app is never disturbed; WAL readers
+    don't take write locks, so no busy_timeout is needed.
+    """
+    uri = f"file:{db_path}?mode=ro"
+    con = sqlite3.connect(uri, uri=True)
+    try:
+        rows = con.execute(
+            """
+            SELECT p.title AS project, t.title AS thread,
+                   t.created_at AS created_at, t.updated_at AS updated_at
+            FROM projection_threads t
+            LEFT JOIN projection_projects p ON p.project_id = t.project_id
+            WHERE t.deleted_at IS NULL
+            ORDER BY t.updated_at DESC
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    threads = [
+        {
+            "project": r[0] or "no project",
+            "title": (r[1] or "").strip()[:80] or "(untitled)",
+            "created_at": _t3_epoch(r[2]),
+            "updated_at": _t3_epoch(r[3]),
+        }
+        for r in rows
+    ]
+    if not threads:
+        return {"thread_count": 0, "time_range": "", "projects": []}
+
+    by_project: Dict[str, List[str]] = {}
+    for t in threads:
+        by_project.setdefault(t["project"], []).append(t["title"])
+    projects = sorted(by_project.items(), key=lambda kv: -len(kv[1]))
+
+    stamps = [s for t in threads for s in (t["created_at"], t["updated_at"]) if s]
+    if stamps:
+        fmt = lambda ts: datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+        time_range = f"{fmt(min(stamps))} → {fmt(max(stamps))}"
+    else:
+        time_range = "unknown dates"
+
+    return {
+        "thread_count": len(threads),
+        "time_range": time_range,
+        "projects": projects,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Detection
 # ---------------------------------------------------------------------------
 
@@ -469,6 +559,8 @@ class AgentImporter:
             return self.build_report()
         if self.agent == "claude-code":
             self._run_claude_code()
+        elif self.agent == "t3code":
+            self._run_t3code()
         else:
             self._run_codex()
         return self.build_report()
@@ -496,6 +588,93 @@ class AgentImporter:
                                 kind="mcp-servers")
         self.import_memories_dir(self.source_root / "memories")
         self.import_skills(self.source_root / "skills")
+
+    def _run_t3code(self) -> None:
+        settings = self._load_t3_settings()
+        self.report_t3_providers(settings)
+        self.import_t3_thread_summary()
+        self.import_skills(self.source_root / "skills")
+
+    # -- T3 Code parsers -----------------------------------------------------
+
+    def _load_t3_settings(self) -> Dict[str, Any]:
+        path = self.source_root / "settings.json"
+        if not path.exists():
+            self.record("settings", None, None, "skipped",
+                        "No settings.json found")
+            return {}
+        try:
+            data = json.loads(read_text(path))
+        except (json.JSONDecodeError, OSError) as exc:
+            self.record("settings", path, None, "error",
+                        f"Could not parse settings.json: {exc}")
+            return {}
+        if not isinstance(data, dict):
+            self.record("settings", path, None, "error",
+                        "settings.json is not a JSON object")
+            return {}
+        return data
+
+    def report_t3_providers(self, settings: Dict[str, Any]) -> None:
+        """Report T3 provider instances read-only.
+
+        T3 providers are CLI-binary wrappers (claude/codex/grok/... with a
+        binaryPath), not API endpoints — there is no Hermes config.yaml
+        equivalent to merge into, so this stays an informational item.
+        """
+        instances = settings.get("providerInstances")
+        if not isinstance(instances, dict) or not instances:
+            self.record("t3-providers", None, None, "skipped",
+                        "No providerInstances found in settings.json")
+            return
+        enabled = sorted(
+            name for name, cfg in instances.items()
+            if isinstance(cfg, dict) and cfg.get("enabled")
+        )
+        self.record("t3-providers", "settings.json providerInstances", None,
+                    "skipped" if not enabled else "imported",
+                    "Read-only report — T3 providers are CLI-binary wrappers "
+                    "with no Hermes equivalent; nothing was merged",
+                    enabled_providers=enabled)
+
+    def import_t3_thread_summary(self) -> None:
+        """Summarize T3 threads into ONE memory entry (never the bodies).
+
+        The conversation bodies belong in Hermes' own session store via
+        ``scripts/t3code_import_sessions.py``; stuffing them into
+        memories/MEMORY.md would pollute the memory store with chat logs.
+        """
+        destination = self.target_root / "memories" / "MEMORY.md"
+        db_path = self.source_root / "state.sqlite"
+        if not db_path.exists():
+            self.record("threads", None, destination, "skipped",
+                        "No state.sqlite found")
+            return
+
+        try:
+            summary = _summarize_t3_threads(db_path)
+        except Exception as exc:
+            self.record("threads", db_path, destination, "error",
+                        f"Could not read state.sqlite: {exc}")
+            return
+
+        if summary["thread_count"] == 0:
+            self.record("threads", db_path, destination, "skipped",
+                        "No active threads found")
+            return
+
+        parts = [f"T3 Code threads at import time ({summary['time_range']}):"]
+        for project, titles in summary["projects"]:
+            parts.append(f"- {project}: {len(titles)} thread(s)")
+            for title in titles[:_T3_TITLES_PER_PROJECT]:
+                parts.append(f"  - {title}")
+            hidden = len(titles) - _T3_TITLES_PER_PROJECT
+            if hidden > 0:
+                parts.append(f"  - …and {hidden} more")
+        entry = "\n".join(parts)
+
+        # A single deterministic entry: re-imports dedupe to a no-op.
+        self._merge_memory_entries("threads", db_path, destination, [entry])
 
     # -- parsers (fail soft: bad files become per-item error records) -------
 
@@ -866,13 +1045,20 @@ def import_agent_command(args) -> None:
         detected = detect_agents()
         if not detected:
             print()
-            print_error("No supported agent setup found (~/.claude or ~/.codex).")
+            print_error(
+                "No supported agent setup found ("
+                + ", ".join(f"~/{_AGENT_DEFAULT_DIRS[a]}" for a in SUPPORTED_AGENTS)
+                + ")."
+            )
             print_info("Specify one explicitly: hermes import-agent claude-code --source /path")
             return
         if len(detected) > 1 and explicit_source is None:
             print()
             print_info("Multiple agent setups detected: " + ", ".join(detected))
-            print_info("Pick one: hermes import-agent claude-code   or   hermes import-agent codex")
+            print_info(
+                "Pick one: "
+                + "   or   ".join(f"hermes import-agent {a}" for a in detected)
+            )
             return
         agent = detected[0]
 
