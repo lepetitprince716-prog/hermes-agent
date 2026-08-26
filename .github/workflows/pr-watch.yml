@@ -1,8 +1,13 @@
 name: upstream-pr-watch
 
-# Watches the open upstream PRs (NousResearch/hermes-agent #80461, #87198,
-# #87199, #87202, #87204) for new review activity and lets Claude Code address
-# it on the matching fork branch.
+# Watches the open upstream PRs (NousResearch/hermes-agent #87198, #87199,
+# #92621, #92663, #92936, #92942) for new review activity and lets Claude Code
+# address it on the matching fork branch.
+#
+# A closed PR left in PRS wastes three API calls a tick and, worse, reads as
+# "still watched" — #80461 was merged upstream and #87202/#87204 closed while
+# they sat in this list. The scan now skips any PR the API does not report as
+# open and says so in the step log, so a stale list is visible instead of silent.
 #
 # When adding a PR to PRS, run this workflow once via workflow_dispatch with
 # prime=true. That records the PR's existing comments as already-seen; without
@@ -10,8 +15,8 @@ name: upstream-pr-watch
 #
 # Trust model: the upstream repo is public, so anyone can comment on these PRs.
 # Only feedback from upstream maintainers (author_association OWNER / MEMBER /
-# COLLABORATOR), GitHub bots, the upstream AI triage account (spfcraze), or the
-# fork owner themselves is allowed to drive code changes and replies. Comments from anyone else never reach the agent; they are
+# COLLABORATOR), GitHub bots, the named upstream reviewer accounts, or the fork
+# owner themselves is allowed to drive code changes and replies. Comments from anyone else never reach the agent; they are
 # appended to .github/pr-watch-untrusted.jsonl for a human to read.
 #
 # State (last-processed comment ids) lives in .github/pr-watch-state.json and is
@@ -66,23 +71,31 @@ jobs:
           import json, os, subprocess
 
           PRS = {
-              "80461": "feat/desktop-sdk-focused-session-state",
               "87198": "per-model-compression-cap",
               "87199": "skills-index-compact-categories",
-              "87202": "desktop-mac-tcc-screen-recording",
-              "87204": "desktop-nsscreencapture-plist",
+              "92621": "fix/mcp-schema-cache-zero-ttl",
+              "92663": "fix/borrowed-credential-status-reset",
+              "92936": "fix/picker-prefetch-respects-swr",
+              "92942": "feat/settings-model-select-search",
           }
           # Priming records what exists right now as already-seen, so newly
           # watched PRs do not replay their whole comment history at the agent.
           PRIME = os.environ.get("PRIME", "").lower() == "true"
           # Only these may steer the agent. On a public repo everyone else is a stranger.
           TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
-          # User-account automation that GitHub does not mark type=Bot, so the
-          # type check alone would quarantine it. spfcraze runs the upstream
-          # AI triage pass on these PRs; its feedback is the main thing this
-          # watcher exists to answer. Injection risk from comment bodies is
-          # contained by the TRUST BOUNDARY section of the agent prompt below.
-          TRUSTED_REVIEWER_LOGINS = {"spfcraze"}
+          # Upstream accounts whose feedback must reach the agent even though the
+          # association check alone would quarantine it. GitHub reports every one
+          # of these as CONTRIBUTOR on this repo, which is why the association
+          # set below does not cover them, and why every review this watcher had
+          # ever seen sat unread in pr-watch-untrusted.jsonl:
+          #   spfcraze, Enough1122 — the upstream AI triage pass on these PRs;
+          #     its feedback is the main thing this watcher exists to answer.
+          #   teknium1 — upstream maintainer. Its merge notice on #80461 was
+          #     quarantined, so nobody learned the PR had landed.
+          # These are user accounts GitHub does not mark type=Bot, so the type
+          # check alone does not admit them. Injection risk from comment bodies
+          # is contained by the TRUST BOUNDARY section of the agent prompt below.
+          TRUSTED_REVIEWER_LOGINS = {"spfcraze", "Enough1122", "teknium1"}
           # The fork owner steers their own PRs. Upstream they are only a
           # CONTRIBUTOR (or NONE), so the association check alone would
           # quarantine their own review replies.
@@ -99,7 +112,23 @@ jobs:
           state = json.load(open(".github/pr-watch-state.json"))
           report = {}
           untrusted = []
+
+          def pr_state(pr):
+              out = subprocess.run(
+                  ["gh", "api", f"repos/NousResearch/hermes-agent/pulls/{pr}",
+                   "--jq", ".state"],
+                  capture_output=True, text=True, check=True,
+              )
+              return out.stdout.strip()
+
+          skipped = []
           for pr, branch in PRS.items():
+              # A closed PR cannot receive actionable feedback, and leaving it
+              # here hides that the list needs pruning. Report it, do not scan it.
+              state_of_pr = pr_state(pr)
+              if state_of_pr != "open":
+                  skipped.append(f"{pr}({state_of_pr})")
+                  continue
               actionable = []
               for endpoint, kind in [
                   (f"repos/NousResearch/hermes-agent/issues/{pr}/comments", "issue"),
@@ -137,6 +166,8 @@ jobs:
               for entry in untrusted:
                   fh.write(json.dumps(entry) + "\n")
           print(f"prime={PRIME} actionable_prs={len(report)} untrusted_comments={len(untrusted)}")
+          if skipped:
+              print(f"PRUNE PRS: no longer open -> {', '.join(skipped)}")
           if report:
               print(json.dumps({k: len(v["new"]) for k, v in report.items()}))
           PY
@@ -179,9 +210,21 @@ jobs:
             3. Make the requested code changes. Keep commits focused; author as
                the fork owner noreply identity already configured.
             4. MANDATORY before pushing: run the tests relevant to the branch
-               you changed. Python-side branches:
-               uv run --no-sync python -m pytest tests/agent/test_context_compressor.py tests/agent/test_prompt_builder.py tests/agent/test_system_prompt.py -q
-               Desktop branches (apps/desktop): cd apps/desktop && npx tsc -p . --noEmit
+               you changed, prefixing each with `uv run --no-sync`:
+                 per-model-compression-cap:
+                   python -m pytest tests/agent/test_context_compressor.py -q
+                 skills-index-compact-categories:
+                   python -m pytest tests/agent/test_prompt_builder.py tests/agent/test_system_prompt.py -q
+                 fix/mcp-schema-cache-zero-ttl:
+                   python -m pytest tests/tools/test_mcp_ttl_hint_extraction.py -q
+                 fix/borrowed-credential-status-reset:
+                   python -m pytest tests/agent/test_credential_pool.py tests/agent/test_credential_pool_borrowed_status_persistence.py tests/hermes_cli/test_auth_commands.py -q
+                 fix/picker-prefetch-respects-swr:
+                   python -m pytest tests/hermes_cli/test_model_cache_swr.py tests/hermes_cli/test_model_cache_parallel_prefetch.py -q
+               If a listed path does not exist, find the suite covering the files
+               you touched with `git diff --name-only` and run that instead.
+               Desktop branches (feat/settings-model-select-search and any other
+               apps/desktop work): cd apps/desktop && npx tsc -p . --noEmit
                and the package's lint/test script if one exists.
                Never claim tests pass without running them; paste the real summary line.
             5. Push, then reply on the upstream PR with `gh api` (POST
