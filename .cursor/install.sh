@@ -43,14 +43,14 @@ echo "▶ installing hermes-agent[all,dev] (editable)"
 uv pip install --python .venv/bin/python -e ".[all,dev]"
 
 # ── Node: locate a suitable toolchain ────────────────────────────────────────
-# package.json requires node >=22.22.0. The base image provides it via nvm;
-# source nvm when node isn't already on PATH (install runs non-interactively).
-if ! command -v node >/dev/null 2>&1; then
-  if [ -s "$HOME/.nvm/nvm.sh" ]; then
-    # shellcheck disable=SC1091
-    . "$HOME/.nvm/nvm.sh"
-    nvm use --lts >/dev/null 2>&1 || true
-  fi
+# package.json requires node >=22.22.0. Prefer nvm's installed Node (which
+# satisfies the floor) over any older `node` that happens to be first on PATH,
+# then fall back to PATH node when nvm isn't present. install runs
+# non-interactively, so source nvm explicitly rather than relying on a profile.
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOME/.nvm/nvm.sh"
+  nvm use 22 >/dev/null 2>&1 || nvm use node >/dev/null 2>&1 || nvm use --lts >/dev/null 2>&1 || true
 fi
 
 if command -v node >/dev/null 2>&1; then
