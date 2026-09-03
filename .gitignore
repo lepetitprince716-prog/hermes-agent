@@ -122,7 +122,11 @@ models-dev-upstream/
 
 # Local editor / agent tooling (machine-specific; keep in global config, not the repo)
 .codex/
-.cursor/
+# Ignore machine-specific .cursor/ contents but track the committed Cloud Agent
+# environment definition so Cloud Agents share the same reproducible setup.
+.cursor/*
+!.cursor/environment.json
+!.cursor/install.sh
 .gemini/
 .zed/
 .mcp.json
