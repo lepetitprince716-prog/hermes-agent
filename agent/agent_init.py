@@ -23,7 +23,7 @@ from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse, urlunparse
 
-from agent.context_compressor import ContextCompressor
+from agent.context_compressor import ContextCompressor, parse_model_threshold_tokens
 from agent.agent_runtime_helpers import _ra
 from agent.iteration_budget import IterationBudget, normalize_budget_warning_ratio
 from agent.memory_manager import StreamingContextScrubber
@@ -1484,6 +1484,9 @@ def _parse_compression_config(agent, _agent_cfg) -> CompressionSettings:
             if isinstance(v, (int, float)) and not isinstance(v, bool)
         },
         threshold_tokens=threshold_tokens,
+        # Per-model absolute caps (compression.threshold_tokens_by_model). Parsed
+        # once here; the compressor never re-reads config on the apply path.
+        model_threshold_tokens=parse_model_threshold_tokens(cfg.get("threshold_tokens_by_model")),
         checkpoint_required=checkpoint_required,
         # In-place compaction: no session-id rotation. default=True MUST match DEFAULT_CONFIG
         # (a False default flipped agents into rotation mode when the key was omitted).
@@ -1846,6 +1849,7 @@ def _build_context_engine(agent, _agent_cfg, cs, _custom_providers, _effective_c
             provider=agent.provider, api_mode=agent.api_mode,
             abort_on_summary_failure=cs.abort_on_summary_failure,
             max_tokens=_compressor_max_tokens(agent), model_thresholds=cs.model_thresholds,
+            model_threshold_tokens=getattr(cs, "model_threshold_tokens", None) or {},
             threshold_tokens_cap=cs.threshold_tokens,
             proactive_prune_tokens=cs.proactive_prune_tokens,
             proactive_prune_min_result_chars=cs.proactive_prune_min_chars,

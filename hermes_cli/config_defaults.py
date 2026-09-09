@@ -537,6 +537,11 @@ DEFAULT_CONFIG = {
         # threshold_tokens: absolute token cap — compression triggers at the lower of the ratio
         # threshold and this count. Clamped to the model's context length.
         "threshold_tokens": None,
+        # Per-model overrides for the cap above, keyed by a substring of the model id
+        # (longest case-insensitive match wins). Unlike ratio overrides, an absolute
+        # per-model cap survives the sub-512K floor. Empty = threshold_tokens applies
+        # to every model.
+        "threshold_tokens_by_model": {},
         # "progress_notices": False,    # opt-in (#52995): when True, routine compression
         "target_ratio": 0.20,         # fraction of threshold to preserve as recent tail
         # tail_mode: "lean" = clamped 2.5%-of-window tail (10K floor / 25K cap) plus chunked

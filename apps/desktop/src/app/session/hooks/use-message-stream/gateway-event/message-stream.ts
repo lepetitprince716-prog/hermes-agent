@@ -9,7 +9,7 @@ import { triggerHaptic } from '@/lib/haptics'
 import { billingCtaLabel, clearBillingBlock, runBillingRecovery, setBillingBlock } from '@/store/billing-block'
 import { clearClarifyRequest } from '@/store/clarify'
 import { setSessionCompacting } from '@/store/compaction'
-import { notify } from '@/store/notifications'
+import { $notifications, dismissNotification, notify } from '@/store/notifications'
 import { flashPetActivity, markPetUnread, setPetActivity } from '@/store/pet'
 import { clearAllPrompts } from '@/store/prompts'
 import { providerWaitText, setSessionProviderWait } from '@/store/provider-wait'
@@ -350,6 +350,17 @@ export function handleMessageStreamEvent(ctx: GatewayEventContext): boolean {
         : undefined
 
     completeAssistantMessage(sessionId, finalText, payload?.response_previewed, failure, occurredAt)
+
+    // A later successful turn should drop the sticky gateway-error toast from
+    // a previous failed turn in this session (error kind defaults to durationMs=0).
+    if (!failure) {
+      const prefix = 'gateway-error:'
+      for (const n of $notifications.get()) {
+        if (n.id.startsWith(prefix)) {
+          dismissNotification(n.id)
+        }
+      }
+    }
 
     // Structured billing wall forwarded by the gateway (out of credits /
     // payment required) — cache it + raise a billing-specific toast.

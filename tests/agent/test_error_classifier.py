@@ -962,6 +962,14 @@ class TestClassifyApiError:
         result = classify_api_error(e)
         assert result.message == "Internal server error occurred"
 
+    def test_xai_token_parsing_statusless_is_retryable_server_error(self):
+        """xAI grok-4.6 SSE: OpenAI SDK raises APIError with no HTTP status."""
+        e = MockAPIError("Internal error during token parsing")
+        result = classify_api_error(e, provider="xai-oauth", model="grok-4.6")
+        assert result.reason == FailoverReason.server_error
+        assert result.retryable is True
+        assert result.should_compress is False
+
 
 # ── Test: Adversarial / edge cases (from live testing) ─────────────────
 

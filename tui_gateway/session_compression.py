@@ -144,6 +144,13 @@ def _apply_live_compression_config(agent: Any, cfg: dict | None) -> None:
         # next access (construction's deferred resolution); re-applies the small-context floor too.
         cc._config_context_length = cc._resolved_context_length = None
     cc.threshold_tokens_cap = cc._coerce_threshold_tokens_cap(compression.get("threshold_tokens"))
+    try:
+        from agent.context_compressor import parse_model_threshold_tokens
+        cc.model_threshold_tokens = parse_model_threshold_tokens(
+            compression.get("threshold_tokens_by_model")
+        )
+    except Exception:
+        cc.model_threshold_tokens = {}
     # Invalidate the cached trigger so the next preflight re-derives from percent/window, then the cap.
     cc._threshold_tokens = cc._tail_token_budget = None
 

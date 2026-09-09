@@ -1010,6 +1010,14 @@ def compute_error_backoff(
             _retry_after = None
     wait_time = _retry_after if _retry_after is not None else jittered_backoff(retry_count, base_delay=2.0, max_delay=60.0)
     _backoff_policy = None
+    # xAI token-parsing internals die on rapid identical retries (observed 3/3
+    # within ~22s at ~141k; the next user turn ~2 min later succeeded). Stretch
+    # the default 2s/4s cadence without burning extra 200k-tier attempts.
+    if _retry_after is None:
+        _err_text = str(api_error or "").lower()
+        if "internal error during token parsing" in _err_text:
+            wait_time = jittered_backoff(retry_count, base_delay=8.0, max_delay=60.0)
+            _backoff_policy = "xai_token_parsing"
     _adaptive = is_rate_limited or is_zai_coding_overload
     if _adaptive and _retry_after is None:
         wait_time, _backoff_policy = adaptive_rate_limit_backoff(
