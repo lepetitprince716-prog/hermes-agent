@@ -12,6 +12,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional
 
 from agent.auxiliary_client import (
@@ -1536,13 +1537,76 @@ def _summarize_tool_result_unguarded(tool_name: str, tool_args: str, tool_conten
     return f"[{tool_name}]{first_arg} ({content_len:,} chars result)"
 
 
+def match_model_override(model: str, mapping: "Mapping[str, object] | None") -> str:
+    """Return the mapping key that best matches *model* (longest wins).
+
+    Keys match as case-insensitive substrings of the model name, so
+    ``grok`` matches ``x-ai/grok-4.6`` and ``GLM-5.2`` matches ``glm-5.2-1M``.
+    Empty/blank keys never match. Returns ``\"\"`` when nothing matches.
+    Shared by every per-model compression override so they all speak the
+    same matching language.
+    """
+    if not mapping or not model:
+        return ""
+    needle = str(model).lower()
+    best_key = ""
+    best_len = 0
+    for key in mapping:
+        k = str(key).strip()
+        if k and k.lower() in needle and len(k) > best_len:
+            best_key, best_len = key, len(k)
+    return best_key
+
+
+def parse_model_threshold_tokens(raw: object) -> "dict[str, int]":
+    """Validate a ``compression.threshold_tokens_by_model`` config mapping.
+
+    Returns a ``{model-substring: absolute token cap}`` dict. Entries with
+    blank keys or non-positive/non-integer values are dropped with a
+    warning so a malformed config can never silently zero a threshold.
+    """
+    if not isinstance(raw, dict):
+        if raw:
+            logger.warning(
+                "compression.threshold_tokens_by_model must be a mapping, got %s — ignored",
+                type(raw).__name__,
+            )
+        return {}
+    out: dict[str, int] = {}
+    for key, val in raw.items():
+        skey = str(key).strip()
+        try:
+            ival = int(val)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            logger.warning(
+                "compression.threshold_tokens_by_model[%r]: %r is not an int — dropped",
+                skey, val,
+            )
+            continue
+        if not skey:
+            logger.warning(
+                "compression.threshold_tokens_by_model: blank key — dropped",
+            )
+            continue
+        if ival <= 0:
+            logger.warning(
+                "compression.threshold_tokens_by_model[%r]: cap %r must be > 0 — dropped",
+                skey, val,
+            )
+            continue
+        out[skey] = ival
+    return out
+
+
 def resolve_model_threshold(model: str, model_thresholds: dict[str, float] | None, default: float) -> float:
     """Per-model threshold: longest matching ``model_thresholds`` substring key wins, else ``default``.
     Module-level so plugin context engines can reuse it."""
     if not model_thresholds or not model:
         return default
-    best_key = max((key for key in model_thresholds if key in model), key=len, default="")
-    return float(model_thresholds[best_key]) if best_key else default
+    best_key = match_model_override(model, model_thresholds)
+    if best_key:
+        return float(model_thresholds[best_key])
+    return default
 
 
 def _memory_provider_section(memory_context: str) -> str:
@@ -2206,11 +2270,40 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
     _coerce_threshold_tokens_cap = _coerce_max_tokens
 
     def _apply_threshold_tokens_cap(self) -> None:
-        """Clamp threshold_tokens to the configured cap (itself clamped to the context length)."""
+        """Clamp threshold_tokens to the global cap, then any per-model cap.
+
+        After ``threshold_tokens`` is (re)computed from the ratio-based
+        percent, clamp it to the cap so compression never fires later
+        than the user's preferred absolute token count. The cap itself
+        is clamped to the current context length so a cap larger than
+        the model's window is a no-op (the ratio-based threshold wins).
+
+        Then apply any per-model cap from ``model_threshold_tokens``
+        (config ``compression.threshold_tokens_by_model``; substring keys,
+        longest case-insensitive match wins — see :func:`match_model_override`).
+        Unlike ``model_thresholds`` fractions — which the sub-512K floor
+        (75%) raises back up — an absolute per-model cap survives the floor,
+        so a route can be kept under a provider price band (e.g. grok's 200K
+        long-context 2x tier) without touching other models' windows.
+        """
         if self.threshold_tokens_cap is not None and self.threshold_tokens_cap > 0:
             _effective_cap = min(self.threshold_tokens_cap, self.context_length)
             if _effective_cap < self.threshold_tokens:
                 self.threshold_tokens = _effective_cap
+        model_caps = getattr(self, "model_threshold_tokens", None) or {}
+        if model_caps and self.model:
+            _key = match_model_override(self.model, model_caps)
+            if _key:
+                _effective_cap = model_caps[_key]
+                # Sign guard mirrors the global cap above: a non-positive
+                # cap (e.g. an unparsed caller) must never zero the trigger.
+                if _effective_cap <= 0:
+                    return
+                if self.context_length:
+                    _effective_cap = min(_effective_cap, self.context_length)
+                # Lower-only: a per-model cap never raises the threshold.
+                if _effective_cap < self.threshold_tokens:
+                    self.threshold_tokens = _effective_cap
 
     @staticmethod
     def _effective_threshold_percent(context_length: int, threshold_percent: float) -> float:
@@ -2261,7 +2354,8 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         summary_target_ratio: float = 0.20, quiet_mode: bool = False, summary_model_override: str = None,
         base_url: str = "", api_key: str = "", config_context_length: int | None = None, provider: str = "",
         api_mode: str = "", abort_on_summary_failure: bool = False, max_tokens: int | None = None,
-        model_thresholds: dict[str, float] | None = None, threshold_tokens_cap: Any = None,
+        model_thresholds: dict[str, float] | None = None, model_threshold_tokens: dict[str, int] | None = None,
+        threshold_tokens_cap: Any = None,
         proactive_prune_tokens: int = 0, proactive_prune_min_result_chars: int = 8000,
         proactive_prune_min_reclaim_tokens: int = 4096, min_tail_user_messages: int = 1, tail_mode: str = "lean",
         custom_providers: list | None = None,
@@ -2274,6 +2368,9 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self.custom_providers = custom_providers or None
         # Per-model overrides (longest substring match wins); floor applied on top.
         self.model_thresholds = model_thresholds or {}
+        # Per-model absolute token caps (compression.threshold_tokens_by_model).
+        # Applied after the ratio/floor trigger; lower-only. Empty = no extra cap.
+        self.model_threshold_tokens = model_threshold_tokens or {}
         # Raw config value, before override/floor; fallback when switching to a model with no override.
         self._config_threshold_percent = threshold_percent
         self._base_threshold_percent = resolve_model_threshold(model, self.model_thresholds, threshold_percent)
