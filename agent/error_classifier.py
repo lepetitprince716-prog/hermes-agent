@@ -266,6 +266,13 @@ _EMPTY_PROVIDER_RESPONSE_PATTERNS = (
     "model returning empty responses", "empty response stream",
 )
 
+# Status-less provider internals that are retryable (same recovery as 5xx).
+# xAI grok-4.6 SSE: OpenAI SDK surfaces this as APIError with no HTTP status;
+# three rapid retries at ~141k all died, the next user turn ~2 min later succeeded.
+_PROVIDER_INTERNAL_RETRY_PATTERNS = (
+    "internal error during token parsing",
+)
+
 # Timeout wording from generic exception types the type heuristics would miss.
 _TIMEOUT_MESSAGE_PATTERNS = (
     "timed out", "turn timed out", "request timed out", "deadline exceeded", "operation timed out",
@@ -406,6 +413,7 @@ _MESSAGE_HEAD_RULES = ((_PAYLOAD_TOO_LARGE_PATTERNS, _V_PAYLOAD_TOO_LARGE),) + _
 _MESSAGE_TAIL_RULES = (
     (_OVERLOADED_PATTERNS, _V_OVERLOADED), (_BILLING_PATTERNS, _billing_hints),
     (_RATE_LIMIT_PATTERNS, _V_RATE_LIMIT), (_EMPTY_PROVIDER_RESPONSE_PATTERNS, _V_SERVER_ERROR),
+    (_PROVIDER_INTERNAL_RETRY_PATTERNS, _V_SERVER_ERROR),
     (_CONTEXT_OVERFLOW_PATTERNS, _V_CONTEXT_OVERFLOW), (_AUTH_PATTERNS, _V_AUTH_ROTATE),
     (_PROVIDER_POLICY_BLOCKED_PATTERNS, _V_POLICY_BLOCKED), (_MODEL_NOT_FOUND_PATTERNS, _V_MODEL_NOT_FOUND),
     (_TIMEOUT_MESSAGE_PATTERNS, _V_TIMEOUT), (_CONNECTION_MESSAGE_PATTERNS, _V_TIMEOUT),
