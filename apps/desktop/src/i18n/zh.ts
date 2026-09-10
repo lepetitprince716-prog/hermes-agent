@@ -430,7 +430,8 @@ export const zh: Translations = {
     },
     vault: {
       title: '密码与登录',
-      blurb: '说一句“登录 GitHub”，智能体就会代你登录。第一次遇到登录页时它会当场向你要登录信息，之后就自动完成。密码在本机加密保存并直接填入页面——模型永远看不到。',
+      blurb:
+        '说一句“登录 GitHub”，智能体就会代你登录。第一次遇到登录页时它会当场向你要登录信息，之后就自动完成。密码在本机加密保存并直接填入页面——模型永远看不到。',
       count: n => `已保存 ${n} 项`,
       loadFailed: '无法加载保险库条目',
       empty: '尚未保存任何内容',
@@ -470,6 +471,10 @@ export const zh: Translations = {
       optional: '（可选）',
       createdOn: date => `添加于 ${date}`,
       deleteAction: '移除已保存项',
+      otpField: '验证器密钥',
+      otpPlaceholder: 'Base32 密钥或 otpauth:// 链接',
+      otpHint: '启用两步验证时网站显示的“设置密钥”。保存后 Hermes 会自动生成验证码。',
+      twoFactorBadge: '自动 2FA',
       deleteTitle: '删除此项？',
       deleteDescription: label => `“${label}”将从加密保险库中移除。此操作无法撤销。`,
       deleteConfirm: '删除',
@@ -685,8 +690,8 @@ export const zh: Translations = {
       reactionsTitle: '消息回应',
       reactionsDesc: 'iMessage 风格的表情回应 — 你可以给消息添加回应，Hermes 也能回应你的消息。',
       tipsTitle: '应用内提示',
-      tipsDesc: '指向应用某处的小气泡：空闲时偶尔出现，需要时 Hermes 也会给你一条。关掉一条就不再出现。',
-      tipsReset: (count: number) => `恢复 ${count} 条已关闭的提示`,
+      tipsDesc: '指向应用某处的小气泡：空闲时偶尔出现，需要时 Hermes 也会给你一条。每条提示只出现一次。',
+      tipsReset: (count: number) => `再次显示 ${count} 条提示`,
       toursTitle: '引导导览',
       toursDesc: '让 Hermes 带你熟悉应用：调暗界面并逐步高亮每个位置。',
       composerPopoutTitle: '悬浮输入框',
@@ -4024,7 +4029,15 @@ export const zh: Translations = {
     vaultSavePasswordPlaceholder: '密码',
     vaultSaveFootnote: '在“设置 → 密码与登录”中管理已保存的登录信息。',
     vaultSaveDecline: '不保存',
-    vaultSaveConfirm: '保存并登录'
+    vaultSaveConfirm: '保存并登录',
+    vaultCodeSendFailed: '无法发送验证码',
+    vaultCodeTitle: site => `${site} 的验证码`,
+    vaultCodeDesc: site =>
+      `${site} 要求输入一次性验证码（短信、邮件或验证器应用）。在此输入，Hermes 会将其填入页面；模型永远看不到它。`,
+    vaultCodeLabel: '验证码',
+    vaultCodeFootnote: '提示：在“设置 → 密码与登录”中为该登录保存验证器密钥后，Hermes 会自动填写验证码。',
+    vaultCodeSkip: '跳过',
+    vaultCodeConfirm: '输入验证码'
   },
 
   desktop: {

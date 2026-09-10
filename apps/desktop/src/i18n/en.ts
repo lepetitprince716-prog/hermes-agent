@@ -518,7 +518,7 @@ export const en: Translations = {
       loadFailed: 'Could not load vault items',
       empty: 'Nothing saved yet',
       emptyDesc:
-        'You don\'t have to add anything here. Ask the agent to sign into a site and it will ask you for the login once, on the spot. Use Add if you prefer to enter one ahead of time.',
+        "You don't have to add anything here. Ask the agent to sign into a site and it will ask you for the login once, on the spot. Use Add if you prefer to enter one ahead of time.",
       add: 'Add',
       addTitle: 'Add a login, card or address',
       addDescription: 'Stored encrypted on this machine. The agent never sees the password.',
@@ -554,6 +554,10 @@ export const en: Translations = {
       optional: '(optional)',
       createdOn: date => `Added ${date}`,
       deleteAction: 'Remove saved item',
+      otpField: 'Authenticator key',
+      otpPlaceholder: 'Base32 secret or otpauth:// link',
+      otpHint: 'The "setup key" the site shows when you enable 2FA. With it saved, Hermes generates the codes itself.',
+      twoFactorBadge: '2FA auto',
       deleteTitle: 'Delete this item?',
       deleteDescription: label => `"${label}" will be removed. This cannot be undone.`,
       deleteConfirm: 'Delete',
@@ -562,7 +566,8 @@ export const en: Translations = {
         blurb:
           'Installed password managers are picked up automatically. The agent asks you to unlock one the first time it needs a login from it (once per session); only a session token stays in memory, and the agent never sees your master password or any login.',
         toggleFailed: 'Could not update password manager',
-        notInstalled: name => `Not detected. Install the ${name} command-line tool and sign in to it; Hermes picks it up automatically.`,
+        notInstalled: name =>
+          `Not detected. Install the ${name} command-line tool and sign in to it; Hermes picks it up automatically.`,
         disabledDesc: 'Detected but turned off for Hermes.',
         lockedDesc: 'Detected. The agent will ask you to unlock it when it needs a login, or unlock now.',
         unlockedDesc: 'Unlocked for this session. Locks automatically after 30 minutes idle or when Hermes closes.',
@@ -706,8 +711,8 @@ export const en: Translations = {
       reactionsDesc: 'iMessage-style emoji tapbacks — react to messages, and Hermes can react to yours.',
       tipsTitle: 'In-App Tips',
       tipsDesc:
-        'A small bubble pointing at one part of the app, shown occasionally while idle and by Hermes when it helps. Closing one retires it for good.',
-      tipsReset: (count: number) => `Bring back ${count} closed ${count === 1 ? 'tip' : 'tips'}`,
+        'A small bubble pointing at one part of the app, shown occasionally while idle and by Hermes when it helps. Each tip appears once.',
+      tipsReset: (count: number) => `Show ${count} ${count === 1 ? 'tip' : 'tips'} again`,
       toursTitle: 'Guided Tours',
       toursDesc: 'Let Hermes walk you through the app, dimming the screen and spotlighting each step.',
       composerPopoutTitle: 'Floating Composer',
@@ -3906,7 +3911,15 @@ export const en: Translations = {
     vaultSavePasswordPlaceholder: 'Password',
     vaultSaveFootnote: 'Manage saved logins in Settings → Passwords & Logins.',
     vaultSaveDecline: "Don't save",
-    vaultSaveConfirm: 'Save & sign in'
+    vaultSaveConfirm: 'Save & sign in',
+    vaultCodeSendFailed: 'Could not send the code',
+    vaultCodeTitle: site => `Verification code for ${site}`,
+    vaultCodeDesc: site =>
+      `${site} is asking for a one-time code (text message, email or authenticator app). Enter it here and Hermes types it into the page; the model never sees it.`,
+    vaultCodeLabel: 'Code',
+    vaultCodeFootnote: 'Tip: save the authenticator key with this login in Settings → Passwords & Logins and Hermes enters codes for you.',
+    vaultCodeSkip: 'Skip',
+    vaultCodeConfirm: 'Enter code'
   },
 
   desktop: {
