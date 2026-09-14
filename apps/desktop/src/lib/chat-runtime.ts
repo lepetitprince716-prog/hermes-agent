@@ -1,5 +1,5 @@
 import type { ThreadMessage } from '@assistant-ui/react'
-import type { ModelOptionsResponse } from '@hermes/shared'
+import type { ModelOptionsResult } from '@hermes/shared'
 
 import type { QuickModelOption } from '@/app/chat/composer/types'
 import type { ClientSessionState } from '@/app/types'
@@ -299,7 +299,7 @@ export function normalizePersonalityValue(value: string): string {
 }
 
 export function quickModelOptions(
-  data: ModelOptionsResponse | undefined,
+  data: ModelOptionsResult | undefined,
   currentProvider: string,
   currentModel: string
 ): QuickModelOption[] {
