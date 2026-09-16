@@ -2246,9 +2246,9 @@ def opencode_zen_free_runtime(provider_id: Optional[str], model_id: Optional[str
 _OPENCODE_API_MODE_PREFIXES: dict[str, tuple[tuple[tuple[str, ...], str], ...]] = {
     "opencode-go": (
         (("gpt-", "grok-", "muse-spark"), "codex_responses"),
-        (("minimax-", "qwen"), "anthropic_messages")),
+        (("minimax-", "qwen", "union-"), "anthropic_messages")),
     "opencode-zen": (
-        (("claude-",), "anthropic_messages"), (("gpt-", "grok-", "muse-spark"), "codex_responses"),
+        (("claude-", "union-"), "anthropic_messages"), (("gpt-", "grok-", "muse-spark"), "codex_responses"),
         (("qwen",), "anthropic_messages"))}
 
 
