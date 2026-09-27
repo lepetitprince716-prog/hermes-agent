@@ -248,4 +248,54 @@ describe('model usage statusbar item', () => {
 
     await waitFor(() => expect(requestGateway).toHaveBeenCalledTimes(1))
   })
+
+  it('refreshes live while the panel is open, once the counters settle, and stops once it closes', () => {
+    vi.useFakeTimers()
+
+    try {
+      const requestGateway = vi.fn(async () => ({ routes: [], totals: EMPTY_USAGE }))
+
+      const renderAt = (total: number) => (
+        <Harness
+          activeSessionId="sid-1"
+          currentModel="model/a"
+          currentProvider="provider"
+          currentUsage={{ calls: 1, input: 10, output: total - 10, total }}
+          requestGateway={requestGateway}
+        />
+      )
+
+      const { rerender } = render(renderAt(20))
+      expect(requestGateway).toHaveBeenCalledTimes(1)
+
+      // Opening the panel reads straight away.
+      fireEvent.pointerDown(screen.getByRole('button', { name: /Tokens/i }), { button: 0 })
+      act(() => vi.advanceTimersByTime(0))
+      expect(requestGateway).toHaveBeenCalledTimes(2)
+
+      // A burst of usage updates collapses into one read, a beat after the last
+      // one, so the async token writer has landed the call being read.
+      for (let total = 21; total <= 30; total++) {
+        rerender(renderAt(total))
+      }
+
+      expect(requestGateway).toHaveBeenCalledTimes(2)
+      act(() => vi.advanceTimersByTime(999))
+      expect(requestGateway).toHaveBeenCalledTimes(2)
+      act(() => vi.advanceTimersByTime(1))
+      expect(requestGateway).toHaveBeenCalledTimes(3)
+
+      // Closed again: token movement alone no longer reads.
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+
+      for (let total = 31; total <= 40; total++) {
+        rerender(renderAt(total))
+      }
+
+      act(() => vi.advanceTimersByTime(5000))
+      expect(requestGateway).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

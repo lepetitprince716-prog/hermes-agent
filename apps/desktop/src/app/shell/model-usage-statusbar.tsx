@@ -1,6 +1,6 @@
 import { compactNumber } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { StatusbarItem } from '@/app/shell/statusbar-controls'
 import { useI18n } from '@/i18n'
@@ -14,6 +14,11 @@ interface ModelUsageStatusbarOptions {
   currentUsage: UsageStats
   requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
 }
+
+/** Delay between the live counters moving and the open panel re-reading. Token
+ *  deltas reach SQLite through an async writer after each model call, so an
+ *  immediate read can miss the call that just finished. */
+const LIVE_SETTLE_MS = 1000
 
 const EMPTY_TOTALS: ModelUsageTotals = {
   actual_cost_usd: 0,
@@ -71,10 +76,14 @@ export function useModelUsageStatusbarItem({
   const [error, setError] = useState(false)
   const itemHidden = useStore($statusbarHiddenIds).includes('model-usage')
   const calls = currentUsage.calls
+  // Bumped by the open panel to force a read outside the per-call cadence.
+  const [refreshTick, setRefreshTick] = useState(0)
+  const refresh = useCallback(() => setRefreshTick(tick => tick + 1), [])
 
   // Refresh once per completed model call, not per streamed usage tick: the
   // token counters move many times within one call, and each read walks the
   // session's lineage in SQLite. A hidden item (the default) never reads.
+  // The open panel adds live reads on top through `refresh`.
   useEffect(() => {
     if (itemHidden) {
       return
@@ -112,7 +121,7 @@ export function useModelUsageStatusbarItem({
     return () => {
       cancelled = true
     }
-  }, [activeSessionId, calls, itemHidden, requestGateway])
+  }, [activeSessionId, calls, itemHidden, refreshTick, requestGateway])
 
   const fallbackRoute = useMemo<ModelUsageRoute | null>(() => {
     if (!currentModel || currentUsage.total <= 0 || (usage?.routes.length ?? 0) > 0) {
@@ -150,13 +159,39 @@ export function useModelUsageStatusbarItem({
     label: copy.tokenUsage,
     menuAlign: 'end',
     menuClassName: 'w-auto border-(--ui-stroke-secondary) p-0',
-    menuContent: (
-      <ModelUsagePanel activeModel={currentModel} error={error} loading={loading} routes={routes} totals={totals} />
+    // A render fn, so the panel mounts only while the menu is open: that is
+    // the window in which it refreshes live.
+    menuContent: () => (
+      <LiveRefresh onRefresh={refresh} total={currentUsage.total}>
+        <ModelUsagePanel activeModel={currentModel} error={error} loading={loading} routes={routes} totals={totals} />
+      </LiveRefresh>
     ),
     title: copy.openModelUsage,
     toggleLabel: copy.toggleTokenUsage,
     variant: 'menu'
   }
+}
+
+/** Reads once when the panel opens, then again LIVE_SETTLE_MS after the live
+ *  counters stop moving, for as long as it stays open. */
+function LiveRefresh({ children, onRefresh, total }: { children: ReactNode; onRefresh: () => void; total: number }) {
+  const [totalAtOpen] = useState(total)
+
+  useEffect(() => {
+    onRefresh()
+  }, [onRefresh])
+
+  useEffect(() => {
+    if (total === totalAtOpen) {
+      return
+    }
+
+    const timer = setTimeout(onRefresh, LIVE_SETTLE_MS)
+
+    return () => clearTimeout(timer)
+  }, [onRefresh, total, totalAtOpen])
+
+  return children
 }
 
 function fallbackTotals(route: ModelUsageRoute | null): ModelUsageTotals {
