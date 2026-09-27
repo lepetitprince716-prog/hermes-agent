@@ -1,8 +1,10 @@
 import { compactNumber } from '@hermes/shared'
+import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useState } from 'react'
 
 import type { StatusbarItem } from '@/app/shell/statusbar-controls'
 import { useI18n } from '@/i18n'
+import { $statusbarHiddenIds } from '@/store/statusbar-prefs'
 import type { ModelUsageRoute, ModelUsageTotals, SessionModelUsage, UsageStats } from '@/types/hermes'
 
 interface ModelUsageStatusbarOptions {
@@ -67,8 +69,17 @@ export function useModelUsageStatusbarItem({
   const [usage, setUsage] = useState<SessionModelUsage | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+  const itemHidden = useStore($statusbarHiddenIds).includes('model-usage')
+  const calls = currentUsage.calls
 
+  // Refresh once per completed model call, not per streamed usage tick: the
+  // token counters move many times within one call, and each read walks the
+  // session's lineage in SQLite. A hidden item (the default) never reads.
   useEffect(() => {
+    if (itemHidden) {
+      return
+    }
+
     if (!activeSessionId) {
       setUsage(null)
       setLoading(false)
@@ -101,7 +112,7 @@ export function useModelUsageStatusbarItem({
     return () => {
       cancelled = true
     }
-  }, [activeSessionId, currentUsage.calls, currentUsage.input, currentUsage.output, currentUsage.total, requestGateway])
+  }, [activeSessionId, calls, itemHidden, requestGateway])
 
   const fallbackRoute = useMemo<ModelUsageRoute | null>(() => {
     if (!currentModel || currentUsage.total <= 0 || (usage?.routes.length ?? 0) > 0) {

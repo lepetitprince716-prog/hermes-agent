@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -196,5 +196,56 @@ describe('model usage statusbar item', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Tokens.*16/i })).toBeTruthy()
     })
+  })
+
+  it('reads backend usage once per model call, not once per streamed usage tick', async () => {
+    const requestGateway = vi.fn(async () => ({ routes: [], totals: EMPTY_USAGE }))
+
+    const renderAt = (usage: UsageStats) => (
+      <Harness
+        activeSessionId="sid-1"
+        currentModel="model/a"
+        currentProvider="provider"
+        currentUsage={usage}
+        requestGateway={requestGateway}
+      />
+    )
+
+    const { rerender } = render(renderAt({ calls: 1, input: 100, output: 1, total: 101 }))
+    await waitFor(() => expect(requestGateway).toHaveBeenCalledTimes(1))
+
+    // Mid-call usage ticks: the token counters climb, the call count holds.
+    for (let output = 2; output <= 40; output++) {
+      rerender(renderAt({ calls: 1, input: 100, output, total: 100 + output }))
+    }
+
+    expect(requestGateway).toHaveBeenCalledTimes(1)
+
+    // The next completed call is what earns a refresh.
+    rerender(renderAt({ calls: 2, input: 250, output: 60, total: 310 }))
+    await waitFor(() => expect(requestGateway).toHaveBeenCalledTimes(2))
+  })
+
+  it('never reads backend usage while the item is hidden, and reads once it is shown', async () => {
+    $statusbarHiddenIds.set([...STATUSBAR_HIDDEN_BY_DEFAULT])
+    const requestGateway = vi.fn(async () => ({ routes: [], totals: EMPTY_USAGE }))
+
+    render(
+      <Harness
+        activeSessionId="sid-1"
+        currentModel="model/a"
+        currentProvider="provider"
+        currentUsage={{ calls: 3, input: 10, output: 5, total: 15 }}
+        requestGateway={requestGateway}
+      />
+    )
+
+    expect(requestGateway).not.toHaveBeenCalled()
+
+    act(() => {
+      $statusbarHiddenIds.set([...STATUSBAR_HIDDEN_BY_DEFAULT].filter(id => id !== 'model-usage'))
+    })
+
+    await waitFor(() => expect(requestGateway).toHaveBeenCalledTimes(1))
   })
 })
